@@ -1,0 +1,225 @@
+################################################################################
+# ANÁLISIS DE CINÉTICA DE CRECIMIENTO
+#
+# Autor: La Carmen
+# Fecha: 19 de octubre de 2025
+#
+# INSTRUCCIONES:
+# 1. Rellena tus datos en el PASO 2.
+# 2. AJUSTA LOS LÍMITES de las fases en el PASO 2.5.
+# 3. Ejecuta el script completo (Botón Source).
+################################################################################
+
+# PASO 1: CARGAR LAS HERRAMIENTAS NECESARIAS (NO MODIFICAR)
+# ------------------------------------------------------------------------------
+# install.packages("tidyverse")
+# install.packages("nls.multstart")
+# install.packages("ggpmisc")
+# install.packages("scales")
+
+library(tidyverse)
+library(nls.multstart)
+library(ggpmisc)
+library(scales)
+
+# PASO 2: INGRESE SUS DATOS AQUÍ
+# ------------------------------------------------------------------------------
+datos_ingresados <- tribble(
+  ~dia, ~abs_rep1, ~abs_rep2, ~abs_rep3, ~no_celulas_rep1, ~no_celulas_rep2, ~no_celulas_rep3, ~no_celulas_rep4, ~no_celulas_rep5, ~no_celulas_rep6,
+  # EJEMPLO DE DATOS
+  0,    0.065,     0.041,     0.082,     0.7e5,            1.5e5,            1.2e5,            0.9e5,            1.6e5,            1.1e5,
+  0,    0.065,     0.041,     0.082,     0.7e5,            1.5e5,            1.2e5,            0.9e5,            1.6e5,            1.1e5,
+  1,    0.091,     0.072,     0.105,     1.1e5,            2.1e5,            1.8e5,            1.4e5,            2.3e5,            1.7e5,
+  2,    0.18,      0.12,      0.21,      4.9e5,            2.5e5,            5.1e5,            3.8e5,            3.1e5,            4.5e5,
+  #3,    NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #4,    NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #5,    NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #6,    NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #7,    NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #8,    NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #9,    NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #10,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #11,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #12,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #13,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #14,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #15,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #16,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #17,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #18,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #19,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #20,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #21,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #22,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #23,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #24,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #25,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #26,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #27,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #28,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #29,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  #30,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA
+)
+
+# PASO 2.5: DEFINE LAS FASES DE CRECIMIENTO
+# ------------------------------------------------------------------------------
+dia_fin_latencia <- 2
+dia_fin_exponencial <- 8
+
+
+################################################################################
+# FIN DE LA SECCIÓN DE INGRESO DE DATOS.
+# EL RESTO DEL SCRIPT ES AUTOMÁTICO. NO MODIFICAR.
+################################################################################
+
+# PASO 3: PROCESAMIENTO Y ANÁLISIS AUTOMÁTICO
+# ------------------------------------------------------------------------------
+datos_activos <- filter(datos_ingresados, if_any(starts_with("abs_rep"), ~ !is.na(.)))
+ultimo_dia_con_datos <- max(datos_activos$dia, na.rm = TRUE)
+
+fases <- data.frame(
+  fase = factor(c("Latencia", "Exponencial", "Estacionaria"), levels = c("Latencia", "Exponencial", "Estacionaria")),
+  xmin = c(0, dia_fin_latencia, dia_fin_exponencial),
+  xmax = c(dia_fin_latencia, dia_fin_exponencial, ultimo_dia_con_datos),
+  color = c("#9400d3", "#00bfff", "#cd5c5c")
+)
+
+datos_brutos <- datos_activos %>%
+  pivot_longer(cols = -dia, names_to = c(".value", "replica"), names_pattern = "(.+)_rep(.)") %>%
+  filter(!is.na(abs) & !is.na(no_celulas))
+
+datos_procesados <- datos_brutos %>%
+  group_by(dia) %>%
+  summarise(
+    celulas_media = mean(no_celulas, na.rm = TRUE),
+    celulas_sd = sd(no_celulas, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    ln_N_N0 = log(celulas_media / first(celulas_media)),
+    sd_superior = celulas_media + celulas_sd,
+    sd_inferior = pmax(0, celulas_media - celulas_sd)
+  )
+
+# --- GRÁFICO 1: CORRELACIÓN ---
+modelo_lm <- lm(no_celulas ~ abs, data = datos_brutos)
+
+grafico_correlacion <- ggplot(datos_brutos, aes(x = abs, y = no_celulas)) +
+  geom_smooth(method = "lm", se = FALSE, color = "#FF6B6B", linewidth = 1.2, formula = y ~ x) +
+  geom_point(color = "#4ECDC4", size = 3, shape = 21, fill = "white", stroke = 1.2, alpha = 0.8) +
+  stat_poly_eq(
+    formula = y ~ x,
+    aes(label = paste(after_stat(eq.label), after_stat(rr.label), sep = "*\", \"*")),
+    label.x = "left", label.y = "top",
+    parse = TRUE, size = 4
+  ) +
+  labs(
+    title = "Correlación: Absorbancia vs. Densidad Celular",
+    x = "Absorbancia (DO)", y = "Densidad celular (células/mL)"
+  ) +
+
+  scale_y_continuous(labels = scales::scientific, expand = expansion(mult = c(0, 0.1))) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.1))) +
+  theme_minimal(base_size = 12) +
+  theme(
+    text = element_text(family = "sans"),
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 16, margin = margin(b=10)),
+    panel.grid.minor = element_blank(),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.ticks = element_line(linewidth = 0.4),
+    plot.margin = margin(15, 15, 15, 15),
+    axis.line.x.bottom = element_line(colour = "black", linewidth = 0.7),
+    axis.line.y.left = element_line(colour = "black", linewidth = 0.7)
+  )
+
+# --- GRÁFICO 2: CURVA DE CRECIMIENTO ---
+max_y_lim <- max(datos_procesados$sd_superior, na.rm = TRUE)
+grafico_crecimiento_nuevo <- ggplot() +
+  geom_rect(data = fases, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf, fill = fase), alpha = 0.15, inherit.aes = FALSE) +
+  geom_errorbar(data = datos_procesados, aes(x = dia, ymin = sd_inferior, ymax = sd_superior), width = 0.2, color = "gray50", linewidth = 0.8) +
+  geom_line(data = datos_procesados, aes(x = dia, y = celulas_media), color = "#FF6B6B", linewidth = 1.2) +
+  geom_point(data = datos_brutos, aes(x = dia, y = no_celulas, color = replica), size = 2.5, alpha = 0.8) +
+  
+  scale_x_continuous(breaks = scales::pretty_breaks(), expand = expansion(mult = c(0, 0.05))) +
+  scale_y_continuous(labels = scales::scientific, limits = c(0, max_y_lim * 1.1), expand = expansion(mult = c(0, 0.05))) +
+  scale_color_brewer(name = "Réplicas", palette = "Set2") +
+  scale_fill_manual(name = "Fases de Crecimiento", values = setNames(fases$color, fases$fase)) +
+  labs(title = "Cinética de Crecimiento Celular", x = "Tiempo (días)", y = "Densidad celular (células/mL)") +
+  theme_minimal(base_size = 12) +
+  theme(
+    text = element_text(family = "sans"),
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 16, margin = margin(b=10)),
+    panel.grid.minor = element_blank(),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.ticks = element_line(linewidth = 0.4),
+    legend.position = "right", legend.box = "vertical", legend.title = element_text(face="bold"),
+    plot.margin = margin(15, 15, 15, 15),
+    axis.line.x.bottom = element_line(colour = "black", linewidth = 0.7),
+    axis.line.y.left = element_line(colour = "black", linewidth = 0.7)
+  ) +
+  guides(fill = guide_legend(order = 2), color = guide_legend(order = 1))
+
+# --- GRÁFICO 3: AJUSTE A MODELO DE GOMPERTZ ---
+gompertz_ln_model <- function(t, A_ln, mu_max_ln, lambda_ln) { A_ln * exp(-exp(((mu_max_ln * exp(1)) / A_ln) * (lambda_ln - t) + 1)) }
+datos_fit <- datos_procesados %>%
+  select(dia, ln_N_N0) %>%
+  filter(is.finite(ln_N_N0)) %>%
+  add_row(dia = 0, ln_N_N0 = 0, .before = 1) %>%
+  distinct()
+fit_gompertz <- tryCatch({ nls_multstart(ln_N_N0 ~ gompertz_ln_model(dia, A_ln, mu_max_ln, lambda_ln), data = datos_fit, iter = 500, start_lower = c(A_ln = 0, mu_max_ln = 0, lambda_ln = 0), start_upper = c(A_ln = max(datos_fit$ln_N_N0, na.rm=T) * 1.5, mu_max_ln = 5, lambda_ln = max(datos_fit$dia)/2), supp_errors = 'Y') }, error = function(e) NULL)
+predicted_curve <- data.frame(dia = seq(0, max(datos_procesados$dia, na.rm=T), length.out = 100))
+if (!is.null(fit_gompertz)) { predicted_curve$ln_N_N0 <- predict(fit_gompertz, newdata = predicted_curve) } else { predicted_curve$ln_N_N0 <- NA }
+grafico_gompertz_nuevo <- ggplot(datos_procesados, aes(x = dia, y = ln_N_N0)) +
+  geom_rect(data = fases, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf, fill = fase), alpha = 0.15, inherit.aes = FALSE) +
+  geom_line(data = predicted_curve, aes(x = dia, y = ln_N_N0), color = "#FF6B6B", linewidth = 1.5, na.rm = TRUE) +
+  geom_point(color = "#4ECDC4", size = 3.5, shape = 21, fill = "white", stroke = 1.5) +
+  
+  scale_x_continuous(breaks = scales::pretty_breaks(), expand = expansion(mult = c(0, 0.05))) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05)), limits = c(0, NA)) +
+  scale_fill_manual(name = "Fases de Crecimiento", values = setNames(fases$color, fases$fase)) +
+  labs(title = "Ajuste al Modelo de Gompertz", subtitle = "Puntos: Datos Observados | Línea: Modelo Ajustado", x = "Tiempo (días)", y = "Crecimiento relativo (ln(N/N₀))") +
+  theme_minimal(base_size = 12) +
+  theme(
+    text = element_text(family = "sans"),
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 16, margin = margin(b=5)),
+    plot.subtitle = element_text(hjust = 0.5, size=10),
+    panel.grid.minor = element_blank(),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.ticks = element_line(linewidth = 0.4),
+    legend.position = "right", legend.title = element_text(face="bold"),
+    plot.margin = margin(15, 15, 15, 15),
+    axis.line.x.bottom = element_line(colour = "black", linewidth = 0.7),
+    axis.line.y.left = element_line(colour = "black", linewidth = 0.7)
+  )
+
+params <- if(!is.null(fit_gompertz)) coef(fit_gompertz) else NULL
+
+# PASO 4: VISUALIZACIÓN DE RESULTADOS Y REPORTE FINAL (AUTOMÁTICO)
+# ------------------------------------------------------------------------------
+print(grafico_correlacion)
+Sys.sleep(1)
+print(grafico_crecimiento_nuevo)
+Sys.sleep(1)
+print(grafico_gompertz_nuevo)
+
+cat("\n\n=========================================================\n")
+cat("          INFORME DE ANÁLISIS DE CRECIMIENTO\n")
+cat("=========================================================\n\n")
+cat("--- 1. Correlación (calculada sobre datos brutos) ---\n")
+if(exists("modelo_lm")) {
+  cat(sprintf("   Ecuación de la recta: y = %.2e * x + %.2e\n", coef(modelo_lm)[2], coef(modelo_lm)[1]))
+  cat(sprintf("   Coeficiente de determinación (R²): %.4f\n\n", summary(modelo_lm)$r.squared))
+} else {
+  cat("   No se pudo calcular el modelo de correlación.\n\n")
+}
+cat("--- 2. Parámetros Cinéticos del Modelo de Gompertz (Logarítmico) ---\n")
+if(!is.null(params)){
+  cat(sprintf("   A (Máx. Crecimiento Relativo, ln(Nmax/N₀)): %.4f\n", params["A_ln"]))
+  cat(sprintf("   μ_max (Tasa Máx. de Crecimiento Relativo): %.4f (1/día)\n", params["mu_max_ln"]))
+  cat(sprintf("   λ (Fase de Latencia / Lag): %.4f días\n\n", params["lambda_ln"]))
+} else {
+  cat("   No se pudo ajustar el modelo de Gompertz a los datos proporcionados.\n   (Puede deberse a pocos puntos de datos o un patrón no sigmoideo).\n\n")
+}
+cat("---------------------------------------------------------\n")
+cat("Análisis completado.\n")
+cat("=========================================================\n")
