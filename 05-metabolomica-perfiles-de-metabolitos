@@ -38,6 +38,36 @@
 #   repositorio RNA-seq; su conjunto de datos de ejemplo clásico es
 #   airway, del paquete ExperimentData de Bioconductor, que se
 #   analiza con DESeq2.
+#
+# Cómo se obtendría el dato real:
+#   - Experimento: cultivar Chlorella vulgaris bajo luz LED azul,
+#     blanca (control) y roja, con 3 réplicas biológicas por
+#     condición, como en el trabajo de acumulación de lípidos con
+#     luz azul y roja de Torres-Martínez y colaboradores
+#     (J. Appl. Phycol. 2025, doi: 10.1007/s10811-024-03426-4).
+#     Cosechar la biomasa y extraer los metabolitos.
+#   - Medición por tipo de metabolito: los ácidos grasos (C16:0,
+#     C18:1, C18:2, C18:3) se miden por cromatografía de gases
+#     (GC-FID) después de extraer los lípidos y convertirlos en
+#     ésteres metílicos; los pigmentos (clorofila a y b, luteína,
+#     beta-caroteno) por extracción con solvente y espectrofotometría
+#     o por HPLC; la glucosa y el glicerol por ensayos enzimáticos o
+#     por LC-MS/GC-MS. En cada caso el equipo da un área de pico que
+#     se normaliza (por estándar interno o por peso seco) y queda
+#     como abundancia relativa, adimensional, comparable entre
+#     muestras del mismo experimento.
+#   - Dónde hay datos reales: los repositorios públicos de
+#     metabolómica (MetaboLights, del EBI,
+#     https://www.ebi.ac.uk/metabolights/) y de proteómica (PRIDE,
+#     https://www.ebi.ac.uk/pride/archive/) guardan perfiles
+#     medidos. El conjunto multi-ómico de Chlorella bajo luz
+#     PXD015681 (PRIDE) trae metabolómica y lipidómica además de
+#     proteómica. Se citan como ejemplo de dónde se descargan datos
+#     reales, no como origen de los valores de esta lección.
+#   - Los valores de esta lección son de ejemplo, generados para el
+#     ejercicio: hacen que el PCA separe las tres condiciones de luz.
+#     Los 10 metabolitos son reales; las abundancias no se midieron
+#     en ningún experimento.
 # ==========================================================================
 
 # --------------------------------------------------------------------------

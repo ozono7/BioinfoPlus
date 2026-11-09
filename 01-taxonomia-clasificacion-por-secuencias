@@ -40,6 +40,48 @@
 #   de GenBank (NCBI) el 2026-11-09. La identidad verdadera del
 #   aislado se usa al final para comprobar que el método recupera el
 #   género correcto.
+#
+# Cómo se obtuvieron los datos:
+#   - Descarga por la página de NCBI: entrar a NCBI Nucleotide
+#     (https://www.ncbi.nlm.nih.gov/nuccore/), buscar el número de
+#     acceso (por ejemplo X13688), revisar en el registro la
+#     DEFINITION (especie y cepa) y el LOCUS (longitud total) y
+#     descargar la secuencia en formato FASTA ("Send to > FASTA").
+#     El fragmento es el rango de posiciones indicado, recortado de
+#     la secuencia completa. También se puede bajar directo con la
+#     dirección de E-utilities:
+#     https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=X13688&rettype=fasta
+#     (cambiar el número de acceso por el que se quiera bajar).
+#   - Descarga con R: el bloque de código de la sección 2 usa el
+#     paquete rentrez para bajar cada registro de GenBank y Biostrings
+#     para recortar el fragmento por sus posiciones. Ese bloque
+#     reproduce las secuencias copiadas en la lección.
+#   - Por qué el gen 18S: es el gen del ARN ribosomal de la subunidad
+#     pequeña; está en todas las microalgas eucariotas, cambia poco
+#     dentro de un género y más entre géneros, así que sirve como
+#     código de barras para clasificar.
+#   - Por qué estas referencias: una congenérica del aislado
+#     (Chlorella vulgaris, mismo género) y un representante de los
+#     otros grupos de algas verdes del trabajo con Chlorella y
+#     Scenedesmus: Scenedesmus acutus (Sphaeropleales) y tres
+#     Chlamydomonadales (Dunaliella salina, Chlamydomonas reinhardtii
+#     y Haematococcus pluvialis). Las cepas (SAG 211-8k, SAG 211-11b,
+#     MPI, SAG 34-1b) son las que trae cada registro de GenBank.
+#   - Por qué este fragmento: las seis secuencias cubren la misma
+#     región homóloga del gen 18S, una zona conservada cerca del
+#     extremo 3' del gen. Las posiciones son distintas en cada
+#     registro porque cada registro empieza en un punto distinto del
+#     gen (por ejemplo, el registro M84320 mide 2182 nucleótidos y
+#     el AJ249512 mide 1635), así que la misma región cae en números
+#     distintos. El ancla es el motivo inicial
+#     CCTGCGGCTTAATTTGACTCAACACGGG, presente al inicio del fragmento
+#     en las seis secuencias. El fragmento mide 200 nucleótidos:
+#     corto para trabajarlo en clase y suficiente para separar
+#     géneros, aunque no especies hermanas de Chlorella.
+#   - Verificación: el 2026-11-09 se comprobó que cada fragmento
+#     coincide al 100% con su registro GenBank en las posiciones
+#     citadas (las seis secuencias se revisaron base por base contra
+#     GenBank).
 # ==========================================================================
 
 # --------------------------------------------------------------------------
@@ -96,6 +138,32 @@ referencias <- c(
     "CGAACGAGACCTCAGCCTGCTAAATAGTCAAGCGTACCTTGGTACGGGCT"
   )
 )
+# Descarga de las secuencias originales desde GenBank (requiere internet).
+# Las secuencias ya están copiadas arriba, así que este bloque es opcional:
+# con él se comprueba que los fragmentos de la lección salen de GenBank.
+# install.packages("rentrez")
+# library(rentrez)
+# library(Biostrings)
+# posiciones_18s <- list(
+#   "X62441" = c(1174, 1373),  # Chlorella sorokiniana SAG 211-8k
+#   "X13688" = c(1175, 1374),  # Chlorella vulgaris SAG 211-11b
+#   "AJ249512" = c(1162, 1361),  # Scenedesmus acutus MPI
+#   "M84320" = c(1561, 1760),  # Dunaliella salina
+#   "M32703" = c(1169, 1368),  # Chlamydomonas reinhardtii
+#   "AF159369" = c(1141, 1340)  # Haematococcus pluvialis SAG 34-1b
+# )
+# fragmentos_descargados <- c()
+# for (acceso in names(posiciones_18s)) {
+#   fasta <- rentrez::entrez_fetch(db = "nuccore", id = acceso, rettype = "fasta")
+#   archivo_fasta <- tempfile(fileext = ".fasta")
+#   writeLines(fasta, archivo_fasta)
+#   secuencia <- readDNAStringSet(archivo_fasta)[[1]]
+#   rango <- posiciones_18s[[acceso]]
+#   fragmentos_descargados[acceso] <- as.character(subseq(secuencia, rango[1], rango[2]))
+# }
+# nchar(fragmentos_descargados)  # 200 nucleótidos cada uno
+# fragmentos_descargados["X62441"] == fragmento_aislado  # TRUE
+# fragmentos_descargados["X13688"] == referencias["Chlorella vulgaris"]  # TRUE
 # Clasificación taxonómica de cada referencia (NCBI Taxonomy).
 taxonomia <- tribble(
   ~especie, ~clase, ~orden, ~familia, ~genero, ~acceso,

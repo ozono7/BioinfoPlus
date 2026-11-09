@@ -38,6 +38,37 @@
 #   varianza con la información de todas las proteínas; aquí se usa
 #   la prueba t de Welch por proteína para que cada número salga de
 #   los datos de forma directa.
+#
+# Cómo se obtendría el dato real:
+#   - Experimento: cultivar Chlorella vulgaris bajo luz LED azul y
+#     bajo luz LED roja (las mismas condiciones de luz del trabajo de
+#     acumulación de lípidos con luz azul y roja de Torres-Martínez
+#     y colaboradores, J. Appl. Phycol. 2025,
+#     doi: 10.1007/s10811-024-03426-4), con 3 réplicas biológicas por
+#     condición. Cosechar la biomasa, extraer la proteína total y
+#     digerirla con tripsina.
+#   - Medición: analizar los péptidos por cromatografía líquida
+#     acoplada a espectrometría de masas (LC-MS/MS). La intensidad
+#     LFQ (label-free quantification) de cada proteína sale del
+#     programa de análisis (por ejemplo MaxQuant) a partir de la
+#     señal de sus péptidos; es una intensidad en unidades
+#     arbitrarias (adimensional), comparable entre muestras del
+#     mismo experimento.
+#   - Dónde hay datos reales de proteómica de Chlorella: los
+#     repositorios públicos de proteómica (PRIDE, del consorcio
+#     ProteomeXchange, https://www.ebi.ac.uk/pride/archive/) guardan
+#     los datos crudos de espectrometría de masas con un identificador
+#     PXD. Un ejemplo es el conjunto multi-ómico de Chlorella bajo
+#     luz extrema PXD015681 (proteómica redox, transcriptómica,
+#     metabolómica y lipidómica). Esos datos son de otra especie
+#     (Chlorella ohadii) y de otro diseño (luz extrema), así que se
+#     citan como ejemplo de dónde se descargan datos reales, no como
+#     origen de los valores de esta lección.
+#   - Los valores LFQ de esta lección son de ejemplo, generados para
+#     el ejercicio: muestran los dos casos (proteínas que cambian
+#     entre luz azul y luz roja y proteínas que no cambian). Los
+#     nombres de las 12 proteínas y sus funciones son reales; las
+#     intensidades no se midieron en ningún experimento.
 # ==========================================================================
 
 # --------------------------------------------------------------------------

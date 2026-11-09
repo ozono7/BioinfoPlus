@@ -36,6 +36,41 @@
 #   los genomas completos son los del registro GenBank; el conteo de
 #   elementos anotados (CDS, ARNr, ARNt) se contó en la sección
 #   FEATURES del registro AB001684.
+#
+# Cómo se obtuvieron los datos:
+#   - Descarga por la página de NCBI: entrar a NCBI Nucleotide
+#     (https://www.ncbi.nlm.nih.gov/nuccore/), buscar el número de
+#     acceso AB001684, revisar la DEFINITION (genoma del cloroplasto
+#     de Chlorella vulgaris C-27, secuencia completa) y el LOCUS
+#     (150 613 pares de bases, circular) y descargar la secuencia en
+#     formato FASTA ("Send to > FASTA") o el registro completo en
+#     formato GenBank ("Send to > Complete Record"). Lo mismo para
+#     NC_005353 (genoma del cloroplasto de Chlamydomonas reinhardtii,
+#     203 828 pares de bases; registro RefSeq). El fragmento
+#     analizado son las posiciones 1-1000 del registro AB001684, es
+#     decir, el inicio de la secuencia tal como la depositaron
+#     Wakasugi y colaboradores (1997, Proc. Natl. Acad. Sci. USA
+#     94:5967-5972); en un genoma circular la posición 1 es el punto
+#     donde los autores abrieron el círculo al depositarlo.
+#   - Descarga con R: el bloque de código de la sección 2 usa el
+#     paquete rentrez para bajar el registro de GenBank y Biostrings
+#     para recortar las posiciones 1-1000. Ese bloque reproduce el
+#     fragmento copiado en la lección y comprueba el tamaño, el
+#     contenido GC y los elementos anotados.
+#   - Tamaño y contenido GC de cada genoma completo: se leen del
+#     registro GenBank y se comprueban contando las bases de la
+#     secuencia completa (Chlorella vulgaris 31.6% de GC,
+#     Chlamydomonas reinhardtii 34.5% de GC).
+#   - Elementos anotados: se contaron en la sección FEATURES del
+#     registro AB001684, contando las líneas que empiezan por "CDS"
+#     (regiones codificantes, 174), "rRNA" (genes de ARN ribosomal,
+#     3) y "tRNA" (genes de ARN de transferencia, 33). El bloque de
+#     código de la sección 2 muestra cómo se hace ese conteo con R.
+#   - Verificación: el 2026-11-09 se comprobó que el fragmento de
+#     las posiciones 1-1000 coincide al 100% con el registro
+#     AB001684, que su contenido GC es 25.1% y que los tamaños, los
+#     contenidos GC y los conteos de elementos anotados son los del
+#     registro.
 # ==========================================================================
 
 # --------------------------------------------------------------------------
@@ -94,6 +129,32 @@ anotacion_ab001684 <- tribble(
   "Genes de ARN de transferencia (ARNt)", 33
 )
 anotacion_ab001684
+# Descarga del genoma original desde GenBank (requiere internet). El
+# fragmento de 1000 nucleótidos ya está copiado arriba; este bloque es
+# opcional y reproduce el fragmento desde el registro AB001684 y
+# comprueba el tamaño, el contenido GC y los elementos anotados.
+# install.packages("rentrez")
+# library(rentrez)
+# library(Biostrings)
+# fasta_cloroplasto <- rentrez::entrez_fetch(db = "nuccore", id = "AB001684", rettype = "fasta")
+# archivo_fasta <- tempfile(fileext = ".fasta")
+# writeLines(fasta_cloroplasto, archivo_fasta)
+# genoma_ab001684 <- readDNAStringSet(archivo_fasta)[[1]]
+# length(genoma_ab001684)  # 150613 pares de bases
+# as.character(subseq(genoma_ab001684, 1, 1000)) == fragmento_cloroplasto  # TRUE
+# conteo_genoma <- letterFrequency(genoma_ab001684, c("A", "C", "G", "T"))
+# 100 * (conteo_genoma[["G"]] + conteo_genoma[["C"]]) / sum(conteo_genoma)  # 31.6%
+# Elementos anotados: se cuentan en la sección FEATURES del registro
+# GenBank (archivo .gb). Cada línea que empieza por "     CDS " es una
+# región codificante, "     rRNA " un gen de ARN ribosomal y
+# "     tRNA " un gen de ARN de transferencia.
+# gb_ab001684 <- rentrez::entrez_fetch(db = "nuccore", id = "AB001684", rettype = "gb")
+# archivo_gb <- tempfile(fileext = ".gb")
+# writeLines(gb_ab001684, archivo_gb)
+# lineas_gb <- readLines(archivo_gb)
+# sum(stringr::str_detect(lineas_gb, "^     CDS "))  # 174
+# sum(stringr::str_detect(lineas_gb, "^     rRNA "))  # 3
+# sum(stringr::str_detect(lineas_gb, "^     tRNA "))  # 33
 
 # --------------------------------------------------------------------------
 # 3. Composición de bases del fragmento
