@@ -1,14 +1,22 @@
-################################################################################
+# ==========================================================================
 # ANÁLISIS DE CINÉTICA DE CRECIMIENTO
-#
-# Autor: La Carmen
+# ==========================================================================
+# Autora del material original: La Carmen
 # Fecha: 19 de octubre de 2025
+# Material académico para estudiantes
+# Repositorio: BioinfoPlus — Dr. José Juan Torres Martínez
+# Docente de Ciencias Químicas
+# Universidad Autónoma de San Luis Potosí (UASLP)
+# México
+#
+# Descripción: Análisis de cinética de crecimiento celular: correlación entre absorbancia y densidad celular, curva de crecimiento por fases (latencia, exponencial, estacionaria) y ajuste al modelo de Gompertz.
+# ==========================================================================
+
 #
 # INSTRUCCIONES:
 # 1. Rellena tus datos en el PASO 2.
 # 2. AJUSTA LOS LÍMITES de las fases en el PASO 2.5.
 # 3. Ejecuta el script completo (Botón Source).
-################################################################################
 
 # PASO 1: CARGAR LAS HERRAMIENTAS NECESARIAS (NO MODIFICAR)
 # ------------------------------------------------------------------------------
