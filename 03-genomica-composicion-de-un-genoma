@@ -1,0 +1,204 @@
+# ==========================================================================
+# 03. Genómica: composición de un genoma (cloroplasto de Chlorella vulgaris)
+# ==========================================================================
+# Autor: Dr. José Juan Torres Martínez
+# Docente de Ciencias Químicas
+# Universidad Autónoma de San Luis Potosí (UASLP)
+# México
+#
+# Material académico para estudiantes
+# Serie "BioinfoPlus" — Lección 03: Genómica
+#
+# Descripción: Se analiza la composición del genoma del cloroplasto de
+#   Chlorella vulgaris (GenBank AB001684, secuencia completa). Se
+#   cuentan las cuatro bases en los primeros 1000 nucleótidos del
+#   genoma, se calcula el contenido GC y el sesgo GC en ventanas de
+#   100 nucleótidos, y se compara el tamaño y el contenido GC de este
+#   genoma con el del cloroplasto de Chlamydomonas reinhardtii
+#   (GenBank NC_005353). La genómica mide el genoma completo: su
+#   tamaño, su composición de bases y sus genes anotados.
+#
+# Objetivos de aprendizaje:
+#   - Explicar qué mide la genómica: tamaño del genoma (pb), contenido
+#     GC (%) y genes anotados.
+#   - Contar bases en una secuencia con Biostrings (letterFrequency).
+#   - Calcular el contenido GC y el sesgo GC en ventanas A PARTIR DE
+#     LAS BASES, sin usar un valor dado de antemano.
+#   - Comparar dos genomas de cloroplasto por tamaño y composición.
+#
+# Datos: genoma del cloroplasto de Chlorella vulgaris C-27, GenBank
+#   AB001684, secuencia completa, circular, 150 613 pares de bases
+#   (Wakasugi et al. 1997, Proc. Natl. Acad. Sci. USA 94:5967-5972).
+#   El fragmento analizado son las posiciones 1-1000 del genoma.
+#   Comparación: genoma del cloroplasto de Chlamydomonas reinhardtii,
+#   GenBank NC_005353, 203 828 pares de bases. Secuencias descargadas
+#   de GenBank (NCBI) el 2026-11-09. Los tamaños y contenidos GC de
+#   los genomas completos son los del registro GenBank; el conteo de
+#   elementos anotados (CDS, ARNr, ARNt) se contó en la sección
+#   FEATURES del registro AB001684.
+# ==========================================================================
+
+# --------------------------------------------------------------------------
+# 1. Cargar paquetes
+# --------------------------------------------------------------------------
+# install.packages("tidyverse")
+# if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+# BiocManager::install("Biostrings")
+
+library(tidyverse)
+library(Biostrings)
+
+# --------------------------------------------------------------------------
+# 2. Datos: primeros 1000 nucleótidos del genoma del cloroplasto
+# --------------------------------------------------------------------------
+# Posiciones 1-1000 del genoma completo AB001684 (150 613 pb, circular).
+fragmento_cloroplasto <- paste0(
+  "AATTCAAAAAAATTTCGTTGTGGTTTTGGTTCCAAAGATATTCAATACCA",
+  "GGTCGAATCAAAAAAGACTTTGAAAGAATGTTAATAAATAATGGTACAAA",
+  "AATTAAAGTAATTAAACATCTTACAGAAACAATCACTTGATATCGAGAAA",
+  "TTCTAAATTCTTGAATAACAAGCATTTCTGCGCCAGGAAGAAGTTGTTTT",
+  "CGAAATCTTTCAAAGGTGCGTAAAATTGATCGTGGGATTAATCCAGTTTG",
+  "TTCTCTTGTTCGTTTTTTCATAGAATAAAAAGTTTTTAAAAATTTCTTTA",
+  "AGTTTTTCCTTTTTTTTCTTTAAGTTTTCCTTTTTCATTTCGTTTTCTTC",
+  "CTTCTTTTTTTTTTTTAGAAAAAAAAAGATCAAAAAGAAAGGCTTCTTTT",
+  "CTTTTTCTCAAAAAAAAGAAAAGACTTCTATTTTTTGATTCAATGAGTTT",
+  "TTCGTTCCTTAAAAAAAAAATGGAATCAGAAAAGAAAGACATGAAAAAAA",
+  "GATTTTTTTTCATTTTAAAAAAACTTATAAAAGACACAAAAACTTAAGGT",
+  "TGGGACTAAACTTTTAGTATACAATTGTGTCACCAAACTTGTCAAGCTCG",
+  "AAAACAACTCTTTTGCAGTAAAAAAAAATGCCCGCAAATACTCAAAAATA",
+  "TTATTGTAATTAGTTTATTTAGTATTGTTTTTCTTGCTACTATTTAGGCT",
+  "CGTTACATTAAAATTGTAATTTGGTTTAATTTGTTTTTGCTGCAGTTTTG",
+  "AAAAGCTTTTGAAAATTTAGGGGCGAAATAATGTATTTTAGGGTAATCTG",
+  "CTTTTATAGCAAGAAATAAAAAAAGAGAGGAAAAGACTAATTTGACTTTT",
+  "TTTTTTATTAATTGTTACACTATAAAGTGTTGGGAAAAAAAACCTTTTTT",
+  "TTTTTTTAACTCTGGAAACAATTTTAAATTAACTTTATTTCTGCATTACA",
+  "AAATAAACGAAAGAAAAAACCACTTTTTAATTCTTTTTAAAAATTGATGA"
+)
+
+fragmento <- DNAString(fragmento_cloroplasto)
+
+# Tamaño y contenido GC de los dos genomas completos, según su registro
+# GenBank. Son datos del registro, no valores calculados en este script.
+genomas_cloroplasto <- tribble(
+  ~especie, ~acceso, ~longitud_pb, ~gc_porcentaje,
+  "Chlorella vulgaris", "AB001684", 150613, 31.6,
+  "Chlamydomonas reinhardtii", "NC_005353", 203828, 34.5
+)
+genomas_cloroplasto
+
+# Elementos anotados en el registro GenBank AB001684 (sección FEATURES).
+anotacion_ab001684 <- tribble(
+  ~elemento, ~cantidad,
+  "Regiones CDS anotadas", 174,
+  "Genes de ARN ribosomal (ARNr)", 3,
+  "Genes de ARN de transferencia (ARNt)", 33
+)
+anotacion_ab001684
+
+# --------------------------------------------------------------------------
+# 3. Composición de bases del fragmento
+# --------------------------------------------------------------------------
+# Conteo de cada base con Biostrings. El contenido GC es la proporción de
+# bases G y C entre todas las bases, en porcentaje (%).
+conteo <- letterFrequency(fragmento, c("A", "C", "G", "T"))
+conteo
+longitud_fragmento <- sum(conteo)
+gc_fragmento <- 100 * (conteo[["G"]] + conteo[["C"]]) / longitud_fragmento
+longitud_fragmento
+gc_fragmento
+
+# --------------------------------------------------------------------------
+# 4. Contenido GC y sesgo GC en ventanas de 100 nucleótidos
+# --------------------------------------------------------------------------
+# El sesgo GC de una ventana es (G - C) / (G + C): vale 0 cuando hay la
+# misma cantidad de G que de C, positivo cuando hay más G y negativo cuando
+# hay más C. Es un número sin unidades entre -1 y 1.
+ventanas <- tibble(
+  inicio = seq(1, 1000, by = 100)
+) %>%
+  mutate(
+    secuencia = map_chr(inicio, ~ as.character(subseq(fragmento, .x, .x + 99))),
+    gc_porcentaje = map_dbl(secuencia, ~ {
+      b <- strsplit(.x, "", fixed = TRUE)[[1]]
+      100 * sum(b == "G" | b == "C") / length(b)
+    }),
+    sesgo_gc = map_dbl(secuencia, ~ {
+      b <- strsplit(.x, "", fixed = TRUE)[[1]]
+      (sum(b == "G") - sum(b == "C")) / (sum(b == "G") + sum(b == "C"))
+    })
+  )
+ventanas
+
+# --------------------------------------------------------------------------
+# 5. Gráficos
+# --------------------------------------------------------------------------
+grafico_gc_ventanas <- ggplot(ventanas, aes(x = inicio, y = gc_porcentaje)) +
+  geom_line() +
+  geom_point() +
+  geom_hline(yintercept = gc_fragmento, linetype = "dashed") +
+  labs(
+    x = "Posición inicial de la ventana (nucleótidos)",
+    y = "Contenido GC (%)",
+    title = "Contenido GC en ventanas de 100 nucleótidos (cloroplasto de C. vulgaris)"
+  ) +
+  theme_minimal()
+
+grafico_tamanos <- ggplot(genomas_cloroplasto, aes(x = reorder(especie, longitud_pb), y = longitud_pb)) +
+  geom_col(fill = "darkgreen") +
+  coord_flip() +
+  labs(
+    x = "Especie",
+    y = "Tamaño del genoma del cloroplasto (pares de bases)",
+    title = "Tamaño del genoma del cloroplasto en dos microalgas verdes"
+  ) +
+  theme_minimal()
+
+grafico_gc_ventanas
+grafico_tamanos
+
+ggsave("03-gc-por-ventanas-cloroplasto.png", plot = grafico_gc_ventanas, width = 8, height = 5, dpi = 300)
+ggsave("03-tamano-genoma-cloroplasto.png", plot = grafico_tamanos, width = 8, height = 5, dpi = 300)
+
+# --------------------------------------------------------------------------
+# Interpretación del gráfico de contenido GC por ventanas
+# --------------------------------------------------------------------------
+# El gráfico muestra el contenido GC en cada ventana de 100 nucleótidos de
+# los primeros 1000 nucleótidos del genoma del cloroplasto de Chlorella
+# vulgaris. Eje x: posición inicial de la ventana, en nucleótidos (nt).
+# Eje y: contenido GC, en porcentaje (%). La línea punteada marca el
+# contenido GC de todo el fragmento, 25.1%.
+# Patrón: el contenido GC por ventana va de 19% a 29% y cambia de una
+#   ventana a otra: las ventanas 101-200 y 201-300 están cerca de 28-29%
+#   y la ventana 901-1000 baja a 19%.
+# Significado: el contenido GC no es uniforme a lo largo del genoma: unas
+#   regiones son más ricas en G y C y otras más ricas en A y T. El
+#   fragmento (25.1%) es más pobre en GC que el genoma completo (31.6%),
+#   así que un fragmento corto no representa la composición de todo el
+#   genoma.
+#
+# Interpretación del gráfico de tamaño del genoma
+# --------------------------------------------------------------------------
+# El gráfico compara el tamaño del genoma del cloroplasto en dos especies.
+# Eje x: especie (categoría, sin unidades). Eje y: tamaño del genoma, en
+# pares de bases (pb).
+# Patrón: el genoma del cloroplasto de Chlamydomonas reinhardtii (203 828
+#   pb) es mayor que el de Chlorella vulgaris (150 613 pb): la diferencia
+#   es de 53 215 pb.
+# Significado: dos microalgas verdes con el mismo tipo de fotosíntesis
+#   tienen genomas de cloroplasto de distinto tamaño. El tamaño del genoma
+#   no dice cuántos genes hay: eso lo dice la anotación (en AB001684 hay
+#   174 regiones CDS, 3 genes de ARNr y 33 genes de ARNt anotados).
+#
+# --------------------------------------------------------------------------
+# Qué aprendimos
+# --------------------------------------------------------------------------
+# - La genómica mide el genoma completo: su tamaño en pares de bases (pb),
+#   su contenido GC en porcentaje (%) y sus genes anotados.
+# - El contenido GC se calcula contando bases: (G + C) / total, en %.
+# - El genoma del cloroplasto de Chlorella vulgaris mide 150 613 pb y su
+#   contenido GC es 31.6%; el fragmento de las posiciones 1-1000 tiene
+#   25.1% de GC: la composición cambia de una región a otra del genoma.
+# - El genoma del cloroplasto de Chlamydomonas reinhardtii es mayor
+#   (203 828 pb) y con más GC (34.5%).
+# - El genoma del cloroplasto es solo una parte del ADN de la célula: el
+#   genoma nuclear, con la mayor parte de los genes, es mucho mayor.

@@ -1,0 +1,234 @@
+# ==========================================================================
+# 01. Taxonomía: clasificación de un aislado por su secuencia 18S
+# ==========================================================================
+# Autor: Dr. José Juan Torres Martínez
+# Docente de Ciencias Químicas
+# Universidad Autónoma de San Luis Potosí (UASLP)
+# México
+#
+# Material académico para estudiantes
+# Serie "BioinfoPlus" — Lección 01: Taxonomía
+#
+# Descripción: Un aislado de microalga del laboratorio se clasifica por
+#   su secuencia del gen 18S (ARN ribosomal, subunidad pequeña). Se
+#   compara un fragmento de 200 nucleótidos del aislado con el mismo
+#   fragmento de cinco especies de referencia de GenBank y se calcula
+#   la identidad de secuencia (porcentaje de posiciones con la misma
+#   base). La referencia con la identidad más alta indica el género
+#   del aislado. El fragmento cubre la misma región del gen en las
+#   seis secuencias y todas tienen la misma longitud, así que la
+#   comparación posición por posición es directa.
+#
+# Objetivos de aprendizaje:
+#   - Explicar por qué el gen 18S sirve como código de barras para
+#     clasificar microalgas eucariotas.
+#   - Leer secuencias de ADN en R con Biostrings (DNAStringSet).
+#   - Calcular la identidad de secuencia entre dos secuencias A
+#     PARTIR DE LAS BASES, sin usar un valor dado de antemano.
+#   - Asignar un aislado a su género con un umbral de identidad y
+#     reconocer hasta dónde llega la resolución del fragmento usado.
+#
+# Datos: fragmento de 200 nucleótidos del gen 18S. Aislado: Chlorella
+#   sorokiniana SAG 211-8k, GenBank X62441, posiciones 1174-1373 del
+#   gen. Referencias: Chlorella vulgaris SAG 211-11b, X13688,
+#   posiciones 1175-1374; Scenedesmus acutus MPI, AJ249512, posiciones
+#   1162-1361; Dunaliella salina, M84320, posiciones 1561-1760;
+#   Chlamydomonas reinhardtii, M32703, posiciones 1169-1368;
+#   Haematococcus pluvialis SAG 34-1b, AF159369, posiciones 1141-1340
+#   (registro archivado como Haematococcus lacustris, nombre actual de
+#   la especie; H. pluvialis es su sinónimo). Secuencias descargadas
+#   de GenBank (NCBI) el 2026-11-09. La identidad verdadera del
+#   aislado se usa al final para comprobar que el método recupera el
+#   género correcto.
+# ==========================================================================
+
+# --------------------------------------------------------------------------
+# 1. Cargar paquetes
+# --------------------------------------------------------------------------
+# install.packages("tidyverse")
+# if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+# BiocManager::install("Biostrings")
+
+library(tidyverse)
+library(Biostrings)
+
+# --------------------------------------------------------------------------
+# 2. Datos: secuencias del fragmento 18S (200 nucleótidos cada una)
+# --------------------------------------------------------------------------
+# El motivo CCTGCGGCTTAATTTGACTCAACACGGG marca el inicio del fragmento en
+# las seis secuencias. Las seis cubren la misma región homóloga del gen 18S.
+fragmento_aislado <- paste0(
+  "CCTGCGGCTTAATTTGACTCAACACGGGAAAACTTACCAGGTCCAGACAT",
+  "AGTGAGGATTGACAGATTGAGAGCTCTTTCTTGATTCTATGGGTGGTGGT",
+  "GCATGGCCGTTCTTAGTTGGTGGGTTGCCTTGTCAGGTTGATTCCGGTAA",
+  "CGAACGAGACCTCAGCCTGCTAAATAGTCACGGTTGGTTCGCCAGCCGGC"
+)
+
+referencias <- c(
+  "Chlorella vulgaris" = paste0(
+    "CCTGCGGCTTAATTTGACTCAACACGGGAAAACTTACCAGGTCCAGACAT",
+    "AGTGAGGATTGACAGATTGAGAGCTCTTTCTTGATTCTATGGGTGGTGGT",
+    "GCATGGCCGTTCTTAGTTGGTGGGTTGCCTTGTCAGGTTGATTCCGGTAA",
+    "CGAACGAGACCTCAGCCTGCTAAATAGTCACGGTTGGTTCGCCAGCCGGC"
+  ),
+  "Scenedesmus acutus" = paste0(
+    "CCTGCGGCTTAATTTGACTCAACACGGGAAAACTTACCAGGTCCAGACAT",
+    "AGTGAGGATTGACAGATTGAGAGCTCTTTCTTGATTCTATGGGTGGTGGT",
+    "GCATGGCCGTTCTTAGTTGGTGGGTTGCCTTGTCAGGTTGATTCCGGTAA",
+    "CGAACGAGACCTCAGCCTGCTAAATAGTCTCAGTTGCTTTTTGCAGCTGG"
+  ),
+  "Dunaliella salina" = paste0(
+    "CCTGCGGCTTAATTTGACTCAACACGGGAAAACTTACCAGGTCCAGACAC",
+    "GGGGAGGATTGACAGATTGAGAGCTCTTTCTTGATTCTGTGGGTGGTGGT",
+    "GCATGGCCGTTCTTAGTTGGTGGGTTGCCTTGTCAGGTTGATTCCGGTAA",
+    "CGAACGAGACCTCAGCCTGCTAAATAGTCACGTCTACCTCGGTAGGCGCC"
+  ),
+  "Chlamydomonas reinhardtii" = paste0(
+    "CCTGCGGCTTAATTTGACTCAACACGGGGAAACTTACCAGGTCCAGACAC",
+    "GGGAAGGATTGACAGATTGAGAGCTCTTTCTTGATTCTGTGGGTGGTGGT",
+    "GCATGGCCGTTCTTAGTTGGTGGGTTGCCTTGTCAGGTTGATTCCGGTAA",
+    "CGAACGAGACCTCAGCCTGCTAAATAGTCAGCATCGCACCTGCGGTGCGC"
+  ),
+  "Haematococcus pluvialis" = paste0(
+    "CCTGCGGCTTAATTTGACTCAACACGGGAAAACTTACCAGGTCCAGACAC",
+    "GGGAAGGATTGACAGATTGAGAGCTCTTTCTTGATTCTGTGGGTGGTGGT",
+    "GCATGGCCGTTCTTAGTTGGTGGGTTGCCTTGTCAGGTTGATTCCGGTAA",
+    "CGAACGAGACCTCAGCCTGCTAAATAGTCAAGCGTACCTTGGTACGGGCT"
+  )
+)
+# Clasificación taxonómica de cada referencia (NCBI Taxonomy).
+taxonomia <- tribble(
+  ~especie, ~clase, ~orden, ~familia, ~genero, ~acceso,
+  "Chlorella vulgaris", "Trebouxiophyceae", "Chlorellales", "Chlorellaceae", "Chlorella", "X13688",
+  "Scenedesmus acutus", "Chlorophyceae", "Sphaeropleales", "Scenedesmaceae", "Scenedesmus", "AJ249512",
+  "Dunaliella salina", "Chlorophyceae", "Chlamydomonadales", "Dunaliellaceae", "Dunaliella", "M84320",
+  "Chlamydomonas reinhardtii", "Chlorophyceae", "Chlamydomonadales", "Chlamydomonadaceae", "Chlamydomonas", "M32703",
+  "Haematococcus pluvialis", "Chlorophyceae", "Chlamydomonadales", "Haematococcaceae", "Haematococcus", "AF159369"
+)
+
+# --------------------------------------------------------------------------
+# 3. Leer las secuencias con Biostrings y revisar su composición
+# --------------------------------------------------------------------------
+adn <- DNAStringSet(c(aislado = fragmento_aislado, referencias))
+
+# Longitud de cada secuencia, en nucleótidos.
+width(adn)
+
+# Conteo de cada base con Biostrings y contenido GC de cada fragmento.
+conteo_bases <- as.data.frame(alphabetFrequency(adn, baseOnly = TRUE)[, c("A", "C", "G", "T")])
+conteo_bases$secuencia <- rownames(conteo_bases)
+conteo_bases$gc_porcentaje <- 100 * (conteo_bases$G + conteo_bases$C) /
+  (conteo_bases$A + conteo_bases$C + conteo_bases$G + conteo_bases$T)
+conteo_bases
+
+# --------------------------------------------------------------------------
+# 4. Identidad de secuencia entre el aislado y cada referencia
+# --------------------------------------------------------------------------
+# La identidad es el porcentaje de posiciones con la misma base. Se calcula
+# base por base a partir de las dos secuencias: nada está dado de antemano.
+comparar_secuencias <- function(secuencia_a, secuencia_b) {
+  bases_a <- strsplit(secuencia_a, split = "", fixed = TRUE)[[1]]
+  bases_b <- strsplit(secuencia_b, split = "", fixed = TRUE)[[1]]
+  sum(bases_a == bases_b)
+}
+
+resultados <- tibble(
+  referencia = names(referencias),
+  coincidencias = map_int(referencias, ~ comparar_secuencias(fragmento_aislado, .x)),
+  longitud = nchar(fragmento_aislado)
+) %>%
+  mutate(
+    diferencias = longitud - coincidencias,
+    identidad_porcentaje = 100 * coincidencias / longitud
+  ) %>%
+  left_join(taxonomia, by = c("referencia" = "especie")) %>%
+  arrange(desc(identidad_porcentaje))
+
+resultados
+
+# --------------------------------------------------------------------------
+# 5. Asignación del aislado
+# --------------------------------------------------------------------------
+# Regla práctica de este ejercicio: una identidad del 97% o más con una
+# referencia indica que el aislado pertenece al mismo género que esa
+# referencia. Por debajo del 97%, el fragmento solo sostiene la asignación
+# a niveles altos (familia, orden, clase).
+mejor <- resultados %>%
+  slice_max(identidad_porcentaje, n = 1)
+mejor
+
+# --------------------------------------------------------------------------
+# 6. Gráficos
+# --------------------------------------------------------------------------
+grafico_identidad <- ggplot(resultados, aes(x = reorder(referencia, identidad_porcentaje), y = identidad_porcentaje)) +
+  geom_col(fill = "darkgreen") +
+  geom_hline(yintercept = 97, linetype = "dashed") +
+  coord_flip() +
+  labs(
+    x = "Especie de referencia",
+    y = "Identidad de secuencia (%)",
+    title = "Identidad del fragmento 18S del aislado con cada referencia"
+  ) +
+  theme_minimal()
+
+grafico_gc <- ggplot(conteo_bases, aes(x = reorder(secuencia, gc_porcentaje), y = gc_porcentaje)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(
+    x = "Secuencia",
+    y = "Contenido GC (%)",
+    title = "Contenido GC del fragmento 18S en cada secuencia"
+  ) +
+  theme_minimal()
+
+grafico_identidad
+grafico_gc
+
+ggsave("01-identidad-aislado-18S.png", plot = grafico_identidad, width = 8, height = 5, dpi = 300)
+ggsave("01-contenido-gc-fragmento-18S.png", plot = grafico_gc, width = 8, height = 5, dpi = 300)
+
+# --------------------------------------------------------------------------
+# Interpretación del gráfico de identidad
+# --------------------------------------------------------------------------
+# El gráfico muestra, para cada especie de referencia, la identidad de
+# secuencia del fragmento 18S del aislado, en porcentaje (%).
+# Eje x: especie de referencia (categoría, sin unidades).
+# Eje y: identidad de secuencia, en porcentaje (%). La línea punteada marca
+#   el umbral del 97% usado en este ejercicio.
+# Patrón: la identidad es 100.0% con Chlorella vulgaris, 94.0% con
+#   Scenedesmus acutus, 93.5% con Dunaliella salina y 90.5% con
+#   Chlamydomonas reinhardtii y con Haematococcus pluvialis. Solo la
+#   referencia de Chlorella supera el umbral del 97%.
+# Significado: el aislado pertenece al género Chlorella. El fragmento no
+#   distingue entre Chlorella vulgaris y Chlorella sorokiniana: en estos
+#   200 nucleótidos las dos especies tienen 0 diferencias, así que la
+#   asignación se queda en género. Para separar especies hermanas se usa el
+#   gen 18S completo o la región ITS, que cambia más rápido entre especies.
+#
+# Interpretación del gráfico de contenido GC
+# --------------------------------------------------------------------------
+# El gráfico muestra el contenido GC de cada fragmento 18S, en porcentaje
+# (%). Eje x: secuencia (categoría, sin unidades). Eje y: contenido GC, en
+# porcentaje (%).
+# Patrón: los seis fragmentos tienen un contenido GC parecido, entre 48% y
+#   53%, porque es la misma región conservada del gen 18S en las seis
+#   especies.
+# Significado: el contenido GC por sí solo no clasifica: dos especies con
+#   el mismo GC pueden ser distintas y dos fragmentos con GC distinto
+#   pueden ser de la misma especie. Lo que clasifica es la secuencia base
+#   por base, no su composición global.
+#
+# --------------------------------------------------------------------------
+# Qué aprendimos
+# --------------------------------------------------------------------------
+# - El gen 18S funciona como código de barras para microalgas eucariotas
+#   porque cambia poco dentro de un género y más entre géneros.
+# - La identidad de secuencia se calcula contando posiciones iguales entre
+#   dos secuencias, y se expresa en porcentaje (%).
+# - Con un fragmento de 200 nucleótidos del gen 18S, el aislado se asigna
+#   al género Chlorella (100.0% de identidad con Chlorella vulgaris).
+# - La identidad verdadera del aislado es Chlorella sorokiniana (GenBank
+#   X62441): el método recupera el género correcto, y el fragmento no
+#   alcanza para separar las dos especies hermanas de Chlorella.
+# - El contenido GC describe la composición de una secuencia, pero no
+#   sustituye a la comparación base por base para clasificar.

@@ -1,0 +1,304 @@
+# ==========================================================================
+# 02. Filogenética: árbol filogenético a partir de distancias genéticas
+# ==========================================================================
+# Autor: Dr. José Juan Torres Martínez
+# Docente de Ciencias Químicas
+# Universidad Autónoma de San Luis Potosí (UASLP)
+# México
+#
+# Material académico para estudiantes
+# Serie "BioinfoPlus" — Lección 02: Filogenética
+#
+# Descripción: Se construye un árbol filogenético sencillo con seis
+#   microalgas verdes a partir de sus secuencias del gen 18S. Primero
+#   se cuentan las diferencias entre cada par de secuencias y se
+#   calcula la distancia genética p (diferencias por sitio) y su
+#   corrección de Jukes y Cantor, que cuenta sustituciones múltiples
+#   en el mismo sitio. Con la matriz de distancias se construye el
+#   árbol con el método de neighbor-joining (paquete ape) y se grafica
+#   con ggplot2. El fragmento usado es el mismo de la Lección 01.
+#
+# Objetivos de aprendizaje:
+#   - Calcular una distancia genética p A PARTIR DE LAS SECUENCIAS
+#     (diferencias divididas por la longitud).
+#   - Aplicar la corrección de Jukes y Cantor a una distancia p.
+#   - Construir una matriz de distancias y un árbol de
+#     neighbor-joining con el paquete ape.
+#   - Leer un árbol: qué es una rama, qué es un nodo y qué mide la
+#     longitud de rama. Reconocer qué partes del árbol sostiene un
+#     fragmento corto y cuáles necesitan el gen completo.
+#
+# Datos: fragmento de 200 nucleótidos del gen 18S, el mismo de la
+#   Lección 01. Chlorella vulgaris SAG 211-11b, X13688, posiciones
+#   1175-1374; Chlorella sorokiniana SAG 211-8k, X62441, posiciones
+#   1174-1373; Scenedesmus acutus MPI, AJ249512, posiciones 1162-1361;
+#   Dunaliella salina, M84320, posiciones 1561-1760; Chlamydomonas
+#   reinhardtii, M32703, posiciones 1169-1368; Haematococcus
+#   pluvialis SAG 34-1b, AF159369, posiciones 1141-1340. Secuencias
+#   descargadas de GenBank (NCBI) el 2026-11-09.
+# ==========================================================================
+
+# --------------------------------------------------------------------------
+# 1. Cargar paquetes
+# --------------------------------------------------------------------------
+# install.packages("tidyverse")
+# install.packages("ape")
+# if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+# BiocManager::install("Biostrings")
+
+library(tidyverse)
+library(Biostrings)
+library(ape)
+
+# --------------------------------------------------------------------------
+# 2. Datos: secuencias del fragmento 18S (200 nucleótidos cada una)
+# --------------------------------------------------------------------------
+# Las seis secuencias cubren la misma región homóloga del gen 18S.
+secuencias <- c(
+  "Chlorella vulgaris" = paste0(
+    "CCTGCGGCTTAATTTGACTCAACACGGGAAAACTTACCAGGTCCAGACAT",
+    "AGTGAGGATTGACAGATTGAGAGCTCTTTCTTGATTCTATGGGTGGTGGT",
+    "GCATGGCCGTTCTTAGTTGGTGGGTTGCCTTGTCAGGTTGATTCCGGTAA",
+    "CGAACGAGACCTCAGCCTGCTAAATAGTCACGGTTGGTTCGCCAGCCGGC"
+  ),
+  "Chlorella sorokiniana" = paste0(
+    "CCTGCGGCTTAATTTGACTCAACACGGGAAAACTTACCAGGTCCAGACAT",
+    "AGTGAGGATTGACAGATTGAGAGCTCTTTCTTGATTCTATGGGTGGTGGT",
+    "GCATGGCCGTTCTTAGTTGGTGGGTTGCCTTGTCAGGTTGATTCCGGTAA",
+    "CGAACGAGACCTCAGCCTGCTAAATAGTCACGGTTGGTTCGCCAGCCGGC"
+  ),
+  "Scenedesmus acutus" = paste0(
+    "CCTGCGGCTTAATTTGACTCAACACGGGAAAACTTACCAGGTCCAGACAT",
+    "AGTGAGGATTGACAGATTGAGAGCTCTTTCTTGATTCTATGGGTGGTGGT",
+    "GCATGGCCGTTCTTAGTTGGTGGGTTGCCTTGTCAGGTTGATTCCGGTAA",
+    "CGAACGAGACCTCAGCCTGCTAAATAGTCTCAGTTGCTTTTTGCAGCTGG"
+  ),
+  "Dunaliella salina" = paste0(
+    "CCTGCGGCTTAATTTGACTCAACACGGGAAAACTTACCAGGTCCAGACAC",
+    "GGGGAGGATTGACAGATTGAGAGCTCTTTCTTGATTCTGTGGGTGGTGGT",
+    "GCATGGCCGTTCTTAGTTGGTGGGTTGCCTTGTCAGGTTGATTCCGGTAA",
+    "CGAACGAGACCTCAGCCTGCTAAATAGTCACGTCTACCTCGGTAGGCGCC"
+  ),
+  "Chlamydomonas reinhardtii" = paste0(
+    "CCTGCGGCTTAATTTGACTCAACACGGGGAAACTTACCAGGTCCAGACAC",
+    "GGGAAGGATTGACAGATTGAGAGCTCTTTCTTGATTCTGTGGGTGGTGGT",
+    "GCATGGCCGTTCTTAGTTGGTGGGTTGCCTTGTCAGGTTGATTCCGGTAA",
+    "CGAACGAGACCTCAGCCTGCTAAATAGTCAGCATCGCACCTGCGGTGCGC"
+  ),
+  "Haematococcus pluvialis" = paste0(
+    "CCTGCGGCTTAATTTGACTCAACACGGGAAAACTTACCAGGTCCAGACAC",
+    "GGGAAGGATTGACAGATTGAGAGCTCTTTCTTGATTCTGTGGGTGGTGGT",
+    "GCATGGCCGTTCTTAGTTGGTGGGTTGCCTTGTCAGGTTGATTCCGGTAA",
+    "CGAACGAGACCTCAGCCTGCTAAATAGTCAAGCGTACCTTGGTACGGGCT"
+  )
+)
+
+# --------------------------------------------------------------------------
+# 3. Diferencias entre cada par de secuencias
+# --------------------------------------------------------------------------
+# Se cuenta, para cada par, en cuántas posiciones las dos secuencias tienen
+# una base distinta. El conteo sale de las secuencias mismas.
+comparar_secuencias <- function(secuencia_a, secuencia_b) {
+  bases_a <- strsplit(secuencia_a, split = "", fixed = TRUE)[[1]]
+  bases_b <- strsplit(secuencia_b, split = "", fixed = TRUE)[[1]]
+  sum(bases_a == bases_b)
+}
+
+especies <- names(secuencias)
+n_especies <- length(especies)
+longitud <- nchar(secuencias[[1]])
+
+matriz_diferencias <- matrix(0, nrow = n_especies, ncol = n_especies,
+  dimnames = list(especies, especies))
+for (i in seq_len(n_especies)) {
+  for (j in seq_len(n_especies)) {
+    matriz_diferencias[i, j] <- longitud - comparar_secuencias(secuencias[[i]], secuencias[[j]])
+  }
+}
+matriz_diferencias
+
+# --------------------------------------------------------------------------
+# 4. Distancia p y corrección de Jukes y Cantor
+# --------------------------------------------------------------------------
+# Distancia p: diferencias divididas por la longitud del fragmento. Es la
+# proporción de sitios que difieren, un número sin unidades entre 0 y 1.
+matriz_p <- matriz_diferencias / longitud
+matriz_p
+
+# Corrección de Jukes y Cantor (Jukes y Cantor, 1969):
+#   d = -3/4 * ln(1 - 4p/3)
+# Cuando dos secuencias difieren en una posición, ese sitio pudo cambiar
+# más de una vez en su historia. La distancia p cuenta solo lo que se ve y
+# se queda corta; la corrección estima la distancia real, en sustituciones
+# por sitio (sin unidades).
+matriz_jc <- -0.75 * log(1 - 4 * matriz_p / 3)
+diag(matriz_jc) <- 0
+matriz_jc
+
+# --------------------------------------------------------------------------
+# 5. Árbol de neighbor-joining
+# --------------------------------------------------------------------------
+# El método neighbor-joining une en cada paso el par de especies más
+# cercanas según la matriz de distancias y recalcula las distancias al
+# resto. El resultado es un árbol sin raíz con longitudes de rama en
+# sustituciones por sitio.
+distancias_jc <- as.dist(matriz_jc)
+arbol <- nj(distancias_jc)
+arbol
+
+# Texto Newick del árbol, con las longitudes de rama.
+write.tree(arbol)
+
+# --------------------------------------------------------------------------
+# 6. Coordenadas del árbol para graficarlo con ggplot2
+# --------------------------------------------------------------------------
+# La raíz del dibujo es el nodo interno que nunca aparece como hijo en la
+# tabla de ramas (arbol$edge). La coordenada x de cada nodo es su distancia
+# a la raíz, sumando la longitud de las ramas. La coordenada y de cada punta
+# se asigna recorriendo el árbol desde la raíz; la y de cada nodo interno
+# es el promedio de las y de sus hijos.
+n_puntas <- length(arbol$tip.label)
+n_total <- n_puntas + arbol$Nnode
+nodos_padre <- arbol$edge[, 1]
+nodos_hijo <- arbol$edge[, 2]
+raiz <- setdiff(unique(nodos_padre), unique(nodos_hijo))[1]
+
+profundidad <- rep(NA_real_, n_total)
+profundidad[raiz] <- 0
+cambio <- TRUE
+while (cambio) {
+  cambio <- FALSE
+  for (k in seq_len(nrow(arbol$edge))) {
+    padre <- arbol$edge[k, 1]
+    hijo <- arbol$edge[k, 2]
+    if (!is.na(profundidad[padre]) && is.na(profundidad[hijo])) {
+      profundidad[hijo] <- profundidad[padre] + arbol$edge.length[k]
+      cambio <- TRUE
+    }
+  }
+}
+
+hijos_de <- split(arbol$edge[, 2], arbol$edge[, 1])
+
+orden_puntas <- c()
+recorrer <- function(nodo) {
+  hijos_nodo <- hijos_de[[as.character(nodo)]]
+  if (is.null(hijos_nodo)) {
+    orden_puntas <<- c(orden_puntas, nodo)
+  } else {
+    for (h in hijos_nodo) recorrer(h)
+  }
+}
+recorrer(raiz)
+
+pos_y <- rep(NA_real_, n_total)
+for (i in seq_along(orden_puntas)) pos_y[orden_puntas[i]] <- i
+calcular_y <- function(nodo) {
+  if (!is.na(pos_y[nodo])) return(pos_y[nodo])
+  hijos_nodo <- hijos_de[[as.character(nodo)]]
+  pos_y[nodo] <<- mean(vapply(hijos_nodo, calcular_y, numeric(1)))
+  pos_y[nodo]
+}
+calcular_y(raiz)
+
+# Un segmento horizontal por rama y uno vertical por nodo interno.
+segmentos_h <- tibble(
+  x0 = profundidad[arbol$edge[, 1]],
+  x1 = profundidad[arbol$edge[, 2]],
+  y = pos_y[arbol$edge[, 2]]
+)
+segmentos_v <- tibble(
+  x = profundidad[as.integer(names(hijos_de))],
+  y0 = vapply(hijos_de, function(h) min(pos_y[h]), numeric(1)),
+  y1 = vapply(hijos_de, function(h) max(pos_y[h]), numeric(1))
+)
+etiquetas <- tibble(
+  x = profundidad[seq_len(n_puntas)],
+  y = pos_y[seq_len(n_puntas)],
+  especie = arbol$tip.label
+)
+
+# --------------------------------------------------------------------------
+# 7. Gráficos
+# --------------------------------------------------------------------------
+tabla_distancias <- as.data.frame(as.table(matriz_jc))
+grafico_distancias <- ggplot(tabla_distancias, aes(x = Var1, y = Var2, fill = Freq)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "darkgreen") +
+  labs(
+    x = NULL,
+    y = NULL,
+    fill = "Distancia JC\n(sustituciones por sitio)",
+    title = "Distancias genéticas de Jukes-Cantor entre las seis especies"
+  ) +
+  theme_minimal()
+
+grafico_arbol <- ggplot() +
+  geom_segment(data = segmentos_h, aes(x = x0, xend = x1, y = y, yend = y)) +
+  geom_segment(data = segmentos_v, aes(x = x, xend = x, y = y0, yend = y1)) +
+  geom_text(data = etiquetas, aes(x = x, y = y, label = especie), hjust = 0, nudge_x = 0.002, size = 3.5) +
+  coord_cartesian(xlim = c(0, max(profundidad) * 2)) +
+  labs(
+    x = "Distancia desde la raíz (sustituciones por sitio)",
+    y = NULL,
+    title = "Árbol filogenético (neighbor-joining, distancias de Jukes-Cantor)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+
+grafico_distancias
+grafico_arbol
+
+ggsave("02-matriz-distancias-jc.png", plot = grafico_distancias, width = 8, height = 6, dpi = 300)
+ggsave("02-arbol-neighbor-joining.png", plot = grafico_arbol, width = 9, height = 5, dpi = 300)
+
+# --------------------------------------------------------------------------
+# Interpretación del gráfico de distancias
+# --------------------------------------------------------------------------
+# El gráfico muestra la matriz de distancias de Jukes-Cantor entre cada par
+# de especies, en sustituciones por sitio (número sin unidades). Eje x y
+# eje y: especies (categorías, sin unidades). El color marca el valor de la
+# distancia: más oscuro es más distancia.
+# Patrón: la distancia más pequeña es 0.000 entre Chlorella vulgaris y
+#   Chlorella sorokiniana (0 diferencias en 200 nucleótidos). La siguiente
+#   es 0.041 entre Dunaliella salina y Haematococcus pluvialis (8
+#   diferencias). Las distancias mayores están entre Scenedesmus acutus y
+#   Chlamydomonas reinhardtii (0.119, 22 diferencias).
+# Significado: las especies más cercanas en el fragmento 18S son las dos
+#   Chlorella, seguidas de Dunaliella y Haematococcus. La distancia crece
+#   con el tiempo desde el ancestro común de cada par.
+#
+# Interpretación del árbol
+# --------------------------------------------------------------------------
+# El gráfico es un árbol filogenético. No tiene ejes cartesianos: cada
+# punta es una especie, cada nodo interno es un ancestro común y la
+# longitud de cada rama se mide en sustituciones por sitio (eje x, número
+# sin unidades). El eje y solo ordena las puntas y no tiene escala.
+# Patrón: el árbol agrupa a las dos Chlorella en una rama (distancia 0.000
+#   entre ellas) y a Dunaliella salina con Haematococcus pluvialis en otra
+#   (distancia 0.041). Chlamydomonas reinhardtii queda como hermana del
+#   grupo de Scenedesmus y Chlorella, y las ramas internas son cortas.
+# Significado: el fragmento de 200 nucleótidos sostiene las dos
+#   agrupaciones cercanas, pero las ramas internas cortas indican poca
+#   señal para ordenar los grupos entre sí. En los árboles publicados con
+#   el gen 18S completo (Huss et al. 1999, J. Phycol. 35:587-598),
+#   Chlorella queda en la clase Trebouxiophyceae, separada de las
+#   Chlorophyceae (Chlamydomonas, Dunaliella, Haematococcus y
+#   Scenedesmus). Un fragmento corto de una región conservada no alcanza
+#   para resolver esa separación: la filogenia real usa el gen completo.
+#
+# --------------------------------------------------------------------------
+# Qué aprendimos
+# --------------------------------------------------------------------------
+# - Una distancia genética se calcula a partir de las secuencias: la
+#   distancia p es la proporción de sitios que difieren.
+# - La corrección de Jukes y Cantor estima las sustituciones por sitio
+#   contando los cambios múltiples que la distancia p no ve.
+# - El método neighbor-joining construye un árbol uniendo en cada paso el
+#   par más cercano de la matriz de distancias.
+# - En este fragmento de 200 nucleótidos, las dos Chlorella son idénticas
+#   (distancia 0.000) y Dunaliella salina con Haematococcus pluvialis son
+#   el siguiente par más cercano (distancia 0.041).
+# - La longitud de rama se mide en sustituciones por sitio y las ramas
+#   internas cortas indican poca señal: un fragmento corto no resuelve las
+#   relaciones profundas del árbol.

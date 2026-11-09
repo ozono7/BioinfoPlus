@@ -1,0 +1,204 @@
+# ==========================================================================
+# 05. Metabolómica y otras ómicas: perfiles de metabolitos y qué mide cada ómica
+# ==========================================================================
+# Autor: Dr. José Juan Torres Martínez
+# Docente de Ciencias Químicas
+# Universidad Autónoma de San Luis Potosí (UASLP)
+# México
+#
+# Material académico para estudiantes
+# Serie "BioinfoPlus" — Lección 05: Metabolómica y otras ómicas
+#
+# Descripción: Se analiza un perfil metabolómico de Chlorella vulgaris
+#   bajo luz azul, blanca y roja (3 réplicas por condición): 10
+#   metabolitos, entre ácidos grasos, pigmentos y metabolitos
+#   centrales. Se aplica un análisis de componentes principales (PCA)
+#   para ver si las tres condiciones se separan por su perfil
+#   metabolómico. La lección cierra con el mapa de las ómicas: qué
+#   mide cada una y cómo se relacionan entre sí.
+#
+# Objetivos de aprendizaje:
+#   - Explicar qué mide la metabolómica y qué mide cada una de las
+#     demás ómicas (genómica, transcriptómica, proteómica,
+#     lipidómica, epigenómica, fluxómica).
+#   - Aplicar un análisis de componentes principales (PCA) a una
+#     tabla de metabolitos A PARTIR DE LOS DATOS.
+#   - Leer un gráfico de puntajes PCA y la varianza explicada por
+#     cada componente.
+#   - Relacionar los metabolitos que más pesan en cada componente con
+#     las condiciones de luz.
+#
+# Datos: datos de ejemplo generados con fines didácticos. Los 10
+#   metabolitos son reales (ácidos grasos C16:0, C18:1, C18:2 y
+#   C18:3; clorofila a y b; luteína; beta-caroteno; glucosa;
+#   glicerol) y las abundancias relativas son valores de ejemplo
+#   generados para que el análisis separe las tres condiciones de
+#   luz. La abundancia es un área de pico normalizada (adimensional).
+#   Tres réplicas por condición. La transcriptómica se trabaja en el
+#   repositorio RNA-seq; su conjunto de datos de ejemplo clásico es
+#   airway, del paquete ExperimentData de Bioconductor, que se
+#   analiza con DESeq2.
+# ==========================================================================
+
+# --------------------------------------------------------------------------
+# 1. Cargar paquetes
+# --------------------------------------------------------------------------
+# install.packages("tidyverse")
+
+library(tidyverse)
+
+# --------------------------------------------------------------------------
+# 2. Datos: abundancias relativas de 10 metabolitos en 9 muestras
+# --------------------------------------------------------------------------
+# Datos de ejemplo generados con fines didácticos. Abundancia relativa
+# (área de pico normalizada), adimensional. Azul: luz LED azul; Blanca:
+# luz blanca (control); Roja: luz LED roja. Tres réplicas por condición.
+datos_metabolomica <- tribble(
+  ~metabolito, ~Azul1, ~Azul2, ~Azul3, ~Blanca1, ~Blanca2, ~Blanca3, ~Roja1, ~Roja2, ~Roja3,
+  "C16:0", 180.0, 186.6, 174.2, 107.8, 113.6, 106.5, 96.7, 112.8, 90.5,
+  "C18:1", 141.1, 161.2, 158.7, 96.2, 85.0, 94.7, 72.3, 56.6, 62.9,
+  "C18:2", 66.9, 72.0, 67.3, 58.3, 51.5, 62.0, 55.0, 52.8, 39.9,
+  "C18:3", 54.8, 58.2, 59.3, 37.5, 42.5, 40.0, 40.8, 51.1, 40.8,
+  "clorofila_a", 251.0, 280.2, 235.0, 207.2, 212.8, 211.6, 108.8, 127.2, 148.3,
+  "clorofila_b", 89.7, 119.7, 109.6, 83.3, 114.4, 98.6, 46.8, 54.5, 57.9,
+  "luteina", 48.4, 53.7, 49.1, 59.6, 65.4, 50.7, 84.5, 78.0, 83.8,
+  "beta_caroteno", 27.8, 29.9, 31.3, 44.6, 45.9, 34.1, 61.8, 73.5, 53.5,
+  "glucosa", 141.9, 148.3, 174.4, 162.9, 144.2, 143.5, 131.0, 162.1, 128.2,
+  "glicerol", 94.5, 102.2, 96.6, 68.4, 61.2, 69.9, 59.7, 72.5, 68.1
+)
+
+# Qué mide cada ómica: el mapa completo.
+omicas <- tribble(
+  ~omica, ~que_mide, ~ejemplo_en_microalgas, ~tecnica,
+  "Genómica", "La secuencia completa del ADN y los genes presentes", "Genoma del cloroplasto de Chlorella vulgaris (150 613 pb)", "Secuenciación de ADN",
+  "Transcriptómica", "Los ARN mensajeros y su abundancia (qué genes se expresan)", "Expresión de genes bajo luz azul y roja (repo RNA-seq)", "RNA-seq",
+  "Proteómica", "Las proteínas presentes y su abundancia", "Abundancia de Rubisco y AccD bajo luz azul y roja", "Espectrometría de masas (LC-MS/MS)",
+  "Metabolómica", "Los metabolitos pequeños y su abundancia", "Ácidos grasos y pigmentos bajo luz azul, blanca y roja", "LC-MS y GC-MS",
+  "Lipidómica", "El conjunto completo de lípidos", "Perfil de triacilgliceroles para biodiésel", "LC-MS",
+  "Epigenómica", "Las modificaciones químicas del ADN", "Metilación del ADN en respuesta a estrés", "Secuenciación con bisulfito",
+  "Fluxómica", "Las velocidades de las reacciones del metabolismo", "Flujo de carbono hacia lípidos", "Marcado con isótopos estables"
+)
+omicas
+
+# --------------------------------------------------------------------------
+# 3. Promedio por condición y transformación log2
+# --------------------------------------------------------------------------
+# Promedio de cada metabolito en cada condición, en la misma escala de
+# abundancia relativa (adimensional).
+promedios <- datos_metabolomica %>%
+  pivot_longer(cols = -metabolito, names_to = "muestra", values_to = "abundancia") %>%
+  mutate(condicion = str_remove(muestra, "[123]$")) %>%
+  group_by(metabolito, condicion) %>%
+  summarise(media = mean(abundancia), .groups = "drop") %>%
+  pivot_wider(names_from = condicion, values_from = media)
+promedios
+
+# Matriz de metabolitos por muestra, en log2, para el PCA.
+matriz_log2 <- datos_metabolomica %>%
+  column_to_rownames("metabolito") %>%
+  as.matrix() %>%
+  log2()
+
+# --------------------------------------------------------------------------
+# 4. Análisis de componentes principales (PCA)
+# --------------------------------------------------------------------------
+# El PCA combina los 10 metabolitos en componentes nuevos (PC1, PC2, ...)
+# que recogen la mayor varianza posible de los datos. Se centra y se escala
+# cada metabolito para que todos pesen lo mismo, sin importar su abundancia.
+pca <- prcomp(t(matriz_log2), center = TRUE, scale. = TRUE)
+
+# Varianza explicada por cada componente, en porcentaje (%).
+varianza <- tibble(
+  componente = paste0("PC", seq_along(pca$sdev)),
+  varianza_porcentaje = 100 * pca$sdev^2 / sum(pca$sdev^2)
+)
+varianza
+
+# Puntajes: posición de cada muestra en el espacio de los componentes.
+puntajes <- as.data.frame(pca$x[, 1:2])
+puntajes$muestra <- rownames(puntajes)
+puntajes$condicion <- str_remove(puntajes$muestra, "[123]$")
+puntajes
+
+# Cargas: cuánto pesa cada metabolito en cada componente.
+cargas <- as.data.frame(pca$rotation[, 1:2])
+cargas$metabolito <- rownames(cargas)
+cargas
+
+# --------------------------------------------------------------------------
+# 5. Gráficos
+# --------------------------------------------------------------------------
+pc1_var <- round(varianza$varianza_porcentaje[1], 1)
+pc2_var <- round(varianza$varianza_porcentaje[2], 1)
+
+grafico_pca <- ggplot(puntajes, aes(x = PC1, y = PC2, colour = condicion)) +
+  geom_point(size = 4) +
+  labs(
+    x = paste0("PC1 (", pc1_var, "% de la varianza)"),
+    y = paste0("PC2 (", pc2_var, "% de la varianza)"),
+    colour = "Condición",
+    title = "PCA del perfil metabolómico de Chlorella vulgaris"
+  ) +
+  theme_minimal()
+
+grafico_varianza <- ggplot(head(varianza, 5), aes(x = reorder(componente, -varianza_porcentaje), y = varianza_porcentaje)) +
+  geom_col(fill = "darkgreen") +
+  labs(
+    x = "Componente principal",
+    y = "Varianza explicada (%)",
+    title = "Varianza explicada por cada componente principal"
+  ) +
+  theme_minimal()
+
+grafico_pca
+grafico_varianza
+
+ggsave("05-pca-metabolomica.png", plot = grafico_pca, width = 8, height = 6, dpi = 300)
+ggsave("05-varianza-explicada-pca.png", plot = grafico_varianza, width = 8, height = 5, dpi = 300)
+
+# --------------------------------------------------------------------------
+# Interpretación del gráfico PCA
+# --------------------------------------------------------------------------
+# El gráfico muestra la posición de cada muestra en los dos primeros
+# componentes principales. Eje x: puntaje del PC1 (número sin unidades;
+# el PC1 recoge el 72.7% de la varianza). Eje y: puntaje del PC2 (número
+# sin unidades; el PC2 recoge el 12.0% de la varianza). El color marca la
+# condición de luz.
+# Patrón: las tres réplicas de cada condición quedan juntas y las tres
+#   condiciones se separan a lo largo del PC1: las muestras azules en un
+#   extremo, las rojas en el extremo opuesto y las blancas en medio. El
+#   PC1 solo ya separa las tres condiciones.
+# Significado: el perfil metabolómico cambia con la luz. Las cargas del
+#   PC1 muestran qué empuja cada lado: los ácidos grasos (C16:0, C18:1,
+#   C18:2) y las clorofilas pesan hacia el lado azul, y la luteína y el
+#   beta-caroteno hacia el lado rojo. La luz azul sube ácidos grasos y
+#   clorofilas y la luz roja sube carotenoides.
+#
+# Interpretación del gráfico de varianza explicada
+# --------------------------------------------------------------------------
+# El gráfico muestra la varianza explicada por cada componente principal,
+# en porcentaje (%). Eje x: componente principal (categoría, sin
+# unidades). Eje y: varianza explicada, en porcentaje (%).
+# Patrón: el PC1 explica el 72.7% de la varianza, el PC2 el 12.0% y el PC3
+#   el 8.2%. Los dos primeros componentes juntos explican el 84.7%.
+# Significado: casi toda la variación del perfil metabolómico cabe en dos
+#   componentes. Un PCA sirve cuando pocos componentes recogen mucha
+#   varianza: el experimento se resume en un gráfico de dos ejes.
+#
+# --------------------------------------------------------------------------
+# Qué aprendimos
+# --------------------------------------------------------------------------
+# - Cada ómica mide un nivel distinto de la célula: la genómica mide el
+#   ADN, la transcriptómica los ARN mensajeros, la proteómica las
+#   proteínas y la metabolómica los metabolitos pequeños.
+# - La metabolómica mide perfiles de metabolitos (ácidos grasos, pigmentos
+#   y metabolitos centrales) y su abundancia relativa es adimensional.
+# - El PCA resume una tabla de metabolitos en pocos componentes: el PC1
+#   explica aquí el 72.7% de la varianza y separa las tres condiciones de
+#   luz.
+# - Las cargas del PCA dicen qué metabolitos pesan en cada componente: los
+#   ácidos grasos y las clorofilas hacia la luz azul, la luteína y el
+#   beta-caroteno hacia la luz roja.
+# - Las ómicas se combinan: el gen dice qué puede hacer la célula, el
+#   ARN qué genes se expresan, las proteínas qué máquinas hay y los
+#   metabolitos qué está pasando en el metabolismo.

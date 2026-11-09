@@ -1,0 +1,233 @@
+# ==========================================================================
+# 04. Proteómica: abundancia de proteínas entre dos condiciones de luz
+# ==========================================================================
+# Autor: Dr. José Juan Torres Martínez
+# Docente de Ciencias Químicas
+# Universidad Autónoma de San Luis Potosí (UASLP)
+# México
+#
+# Material académico para estudiantes
+# Serie "BioinfoPlus" — Lección 04: Proteómica (datos)
+#
+# Descripción: Se analiza la abundancia de 12 proteínas de Chlorella
+#   vulgaris en dos condiciones de luz (azul y roja, 3 réplicas por
+#   condición). Se transforma la intensidad a log2, se calcula el
+#   cambio en log2 entre condiciones (log2FC) y la prueba t de Welch
+#   para cada proteína, y se dibuja el gráfico de volcán. Las
+#   proteínas de la fotosíntesis y del metabolismo de lípidos son el
+#   centro del análisis: la luz azul y la luz roja cambian la
+#   acumulación de lípidos en Chlorella vulgaris.
+#
+# Objetivos de aprendizaje:
+#   - Explicar qué mide la proteómica: qué proteínas hay y en qué
+#     cantidad, en cada condición.
+#   - Transformar intensidades a log2 y calcular el cambio log2FC
+#     entre dos condiciones A PARTIR DE LOS DATOS.
+#   - Aplicar la prueba t de Welch por proteína y leer un valor p.
+#   - Leer un gráfico de volcán: cambio contra significancia.
+#
+# Datos: datos de ejemplo generados con fines didácticos. Los nombres
+#   de las 12 proteínas son reales (proteínas de Chlorella vulgaris:
+#   rbcL, psaB, psbC, atpA, accD, petB, tufA, gapA, fba, prk, sod,
+#   hsp70) y las intensidades LFQ son valores de ejemplo generados
+#   para que el análisis recorra los dos casos: proteínas que cambian
+#   entre luz azul y luz roja y proteínas que no cambian. La
+#   intensidad LFQ se mide en unidades arbitrarias (adimensional).
+#   Tres réplicas por condición. En un análisis real con muchas
+#   proteínas se usa el paquete limma de Bioconductor, que ajusta la
+#   varianza con la información de todas las proteínas; aquí se usa
+#   la prueba t de Welch por proteína para que cada número salga de
+#   los datos de forma directa.
+# ==========================================================================
+
+# --------------------------------------------------------------------------
+# 1. Cargar paquetes
+# --------------------------------------------------------------------------
+# install.packages("tidyverse")
+# if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+# BiocManager::install("SummarizedExperiment")
+
+library(tidyverse)
+
+# --------------------------------------------------------------------------
+# 2. Datos: intensidades LFQ por proteína y muestra
+# --------------------------------------------------------------------------
+# Datos de ejemplo generados con fines didácticos. Intensidad LFQ en
+# unidades arbitrarias (adimensional). Azul: luz LED azul; Roja: luz LED
+# roja. Tres réplicas por condición.
+datos_proteomica <- tribble(
+  ~proteina, ~azul_1, ~azul_2, ~azul_3, ~roja_1, ~roja_2, ~roja_3,
+  "rbcL", 285669040, 167700819, 188992094, 107055562, 98646708, 104240842,
+  "psaB", 106094887, 129000471, 114238567, 51385975, 64429990, 50451885,
+  "psbC", 70939175, 100731153, 78162446, 45748123, 46394748, 54603972,
+  "atpA", 52057860, 32556769, 31928247, 24532606, 31924482, 35088377,
+  "accD", 8438688, 8583963, 8273320, 18729739, 22097615, 21632532,
+  "petB", 24233497, 21652564, 22554466, 20912216, 14233920, 17551866,
+  "tufA", 52431865, 33941694, 47584145, 29199164, 37429084, 41022323,
+  "gapA", 21978548, 21523300, 27449540, 25989544, 21283747, 21849426,
+  "fba", 8313336, 6766379, 7537367, 15328891, 12903745, 14859545,
+  "prk", 7845883, 10697118, 8969264, 6466816, 7049377, 7005086,
+  "sod", 5050258, 3755815, 3925744, 6088258, 6464415, 8361630,
+  "hsp70", 2546434, 3114833, 2289518, 5612179, 4892882, 5475753
+)
+
+# Función de cada proteína (anotación estándar).
+proteinas_info <- tribble(
+  ~proteina, ~funcion,
+  "rbcL", "Subunidad grande de Rubisco (fijación de CO2, ciclo de Calvin)",
+  "psaB", "Fotosistema I, apoproteína A2 del centro de reacción P700",
+  "psbC", "Fotosistema II, proteína CP43 del centro de reacción",
+  "atpA", "ATP sintasa, subunidad alfa",
+  "accD", "Acetil-CoA carboxilasa, subunidad beta (síntesis de ácidos grasos)",
+  "petB", "Citocromo b6 (cadena de transporte de electrones fotosintética)",
+  "tufA", "Factor de elongación Tu (síntesis de proteínas en el cloroplasto)",
+  "gapA", "Gliceraldehído-3-fosfato deshidrogenasa (glucólisis y ciclo de Calvin)",
+  "fba", "Fructosa-bisfosfato aldolasa (glucólisis y ciclo de Calvin)",
+  "prk", "Fosforribuloquinasa (ciclo de Calvin)",
+  "sod", "Superóxido dismutasa (defensa contra especies reactivas de oxígeno)",
+  "hsp70", "Proteína de choque térmico 70 (respuesta a estrés)"
+)
+
+# --------------------------------------------------------------------------
+# 3. Datos ordenados y transformación log2
+# --------------------------------------------------------------------------
+# La intensidad se transforma a log2: las intensidades van de millones a
+# cientos de millones y en log2 las diferencias se leen como cambios
+# proporcionales (un aumento de 1 en log2 es el doble de proteína).
+datos_largos <- datos_proteomica %>%
+  pivot_longer(cols = -proteina, names_to = "muestra", values_to = "intensidad") %>%
+  mutate(
+    condicion = if_else(str_starts(muestra, "azul"), "Azul", "Roja"),
+    log2_intensidad = log2(intensidad)
+  )
+
+# --------------------------------------------------------------------------
+# 4. Cambio log2FC y prueba t de Welch por proteína
+# --------------------------------------------------------------------------
+# log2FC = media de log2 en luz azul menos media de log2 en luz roja. Es
+# un número sin unidades: log2FC = 1 es el doble de proteína en azul que
+# en roja, log2FC = -1 es la mitad. La prueba t de Welch compara las dos
+# condiciones sin suponer varianzas iguales y da un valor p por proteína.
+resultados <- datos_largos %>%
+  group_by(proteina) %>%
+  summarise(
+    media_azul = mean(log2_intensidad[condicion == "Azul"]),
+    media_roja = mean(log2_intensidad[condicion == "Roja"]),
+    log2fc = media_azul - media_roja,
+    p = t.test(
+      log2_intensidad[condicion == "Azul"],
+      log2_intensidad[condicion == "Roja"]
+    )$p.value,
+    .groups = "drop"
+  ) %>%
+  mutate(
+    menos_log10_p = -log10(p),
+    significativo = p < 0.05
+  ) %>%
+  left_join(proteinas_info, by = "proteina") %>%
+  arrange(p)
+
+resultados
+
+# --------------------------------------------------------------------------
+# 5. Gráficos
+# --------------------------------------------------------------------------
+grafico_volcan <- ggplot(resultados, aes(x = log2fc, y = menos_log10_p, colour = significativo)) +
+  geom_point(size = 3) +
+  geom_text(data = filter(resultados, significativo), aes(label = proteina), nudge_y = 0.15, size = 3, show.legend = FALSE) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
+  labs(
+    x = "Cambio log2 (luz azul - luz roja)",
+    y = "-log10(valor p)",
+    colour = "p < 0.05",
+    title = "Gráfico de volcán: abundancia de proteínas, luz azul contra luz roja"
+  ) +
+  theme_minimal()
+
+grafico_log2fc <- ggplot(resultados, aes(x = reorder(proteina, log2fc), y = log2fc, fill = log2fc > 0)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    x = "Proteína",
+    y = "Cambio log2 (luz azul - luz roja)",
+    fill = "Mayor en azul",
+    title = "Cambio de abundancia por proteína entre luz azul y luz roja"
+  ) +
+  theme_minimal()
+
+grafico_volcan
+grafico_log2fc
+
+ggsave("04-grafico-volcan-proteomica.png", plot = grafico_volcan, width = 8, height = 6, dpi = 300)
+ggsave("04-cambio-log2fc-proteinas.png", plot = grafico_log2fc, width = 8, height = 6, dpi = 300)
+
+# --------------------------------------------------------------------------
+# 6. Guardar los resultados en un objeto SummarizedExperiment
+# --------------------------------------------------------------------------
+# SummarizedExperiment es el contenedor estándar de Bioconductor para
+# datos ómicos: la matriz de valores, los datos de las muestras y los datos
+# de las filas van juntos en un solo objeto.
+matriz_log2 <- datos_largos %>%
+  select(proteina, muestra, log2_intensidad) %>%
+  pivot_wider(names_from = muestra, values_from = log2_intensidad) %>%
+  column_to_rownames("proteina") %>%
+  as.matrix()
+
+col_datos <- data.frame(
+  muestra = colnames(matriz_log2),
+  condicion = rep(c("Azul", "Roja"), each = 3),
+  row.names = colnames(matriz_log2)
+)
+
+se <- SummarizedExperiment::SummarizedExperiment(
+  assays = list(log2_intensidad = matriz_log2),
+  colData = col_datos
+)
+se
+
+# --------------------------------------------------------------------------
+# Interpretación del gráfico de volcán
+# --------------------------------------------------------------------------
+# El gráfico de volcán muestra cada proteína como un punto. Eje x: cambio
+# log2 entre luz azul y luz roja (número sin unidades; positivo es más
+# proteína en azul, negativo es más en roja). Eje y: -log10 del valor p
+# (número sin unidades; más alto es más significativo). La línea vertical
+# marca cambio cero y la horizontal marca p = 0.05.
+# Patrón: 7 de las 12 proteínas quedan por arriba de la línea de p = 0.05.
+#   Del lado azul (log2FC positivo): psaB (log2FC 1.08, p = 0.0022), psbC
+#   (0.76, p = 0.020) y rbcL (1.01, p = 0.046). Del lado rojo (log2FC
+#   negativo): accD (-1.30, p = 0.0024), fba (-0.93, p = 0.0013), hsp70
+#   (-1.02, p = 0.0070) y sod (-0.72, p = 0.021). Las demás (atpA, petB,
+#   tufA, gapA, prk) no cambian de forma significativa.
+# Significado: la luz azul sube las proteínas de la fotosíntesis (Rubisco
+#   y los fotosistemas I y II) y la luz roja sube la maquinaria de
+#   síntesis de ácidos grasos (accD) y de respuesta a estrés (hsp70, sod).
+#   El valor p de rbcL (0.046) está pegado al umbral de 0.05 con solo 3
+#   réplicas por condición: es un cambio a confirmar con más réplicas.
+#
+# Interpretación del gráfico de cambio log2FC
+# --------------------------------------------------------------------------
+# El gráfico muestra el cambio log2 de cada proteína entre luz azul y luz
+# roja. Eje x: proteína (categoría, sin unidades). Eje y: cambio log2
+# (número sin unidades; positivo es más proteína en azul).
+# Patrón: las proteínas de la fotosíntesis (rbcL, psaB, psbC) tienen
+#   log2FC positivo entre 0.76 y 1.08, y accD, fba y hsp70 tienen log2FC
+#   negativo entre -0.93 y -1.30. gapA casi no cambia (log2FC 0.03).
+# Significado: la luz cambia la abundancia de proteínas concretas, no de
+#   todas a la vez. Un log2FC de 1 es el doble de proteína y uno de -1 es
+#   la mitad.
+#
+# --------------------------------------------------------------------------
+# Qué aprendimos
+# --------------------------------------------------------------------------
+# - La proteómica mide qué proteínas hay y en qué cantidad, en cada
+#   condición. La intensidad LFQ se expresa en unidades arbitrarias.
+# - En log2, las diferencias de intensidad se leen como cambios
+#   proporcionales: log2FC = 1 es el doble, log2FC = -1 es la mitad.
+# - La prueba t de Welch da un valor p por proteína: p < 0.05 marca un
+#   cambio significativo con los datos de este ejercicio.
+# - En este ejemplo, la luz azul sube rbcL, psaB y psbC (fotosíntesis) y
+#   la luz roja sube accD (síntesis de ácidos grasos), fba, sod y hsp70.
+# - Los resultados se guardan en un objeto SummarizedExperiment, el
+#   contenedor estándar de Bioconductor para datos ómicos.
