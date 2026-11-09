@@ -35,18 +35,22 @@ library(scales)
 datos_ingresados <- tribble(
   ~dia, ~abs_rep1, ~abs_rep2, ~abs_rep3, ~no_celulas_rep1, ~no_celulas_rep2, ~no_celulas_rep3, ~no_celulas_rep4, ~no_celulas_rep5, ~no_celulas_rep6,
   # EJEMPLO DE DATOS
-  0,    0.065,     0.041,     0.082,     0.7e5,            1.5e5,            1.2e5,            0.9e5,            1.6e5,            1.1e5,
+  # Días 0 a 2: datos originales del ejemplo. Días 3 a 10: valores de ejemplo
+  # generados de forma coherente con los días 0 a 2 (misma tendencia de
+  # crecimiento y misma relación absorbancia-células), para que el ejemplo
+  # completo recorra las tres fases y el ajuste de Gompertz funcione.
+  # Sustituye estas filas por tus propias mediciones.
   0,    0.065,     0.041,     0.082,     0.7e5,            1.5e5,            1.2e5,            0.9e5,            1.6e5,            1.1e5,
   1,    0.091,     0.072,     0.105,     1.1e5,            2.1e5,            1.8e5,            1.4e5,            2.3e5,            1.7e5,
   2,    0.18,      0.12,      0.21,      4.9e5,            2.5e5,            5.1e5,            3.8e5,            3.1e5,            4.5e5,
-  #3,    NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
-  #4,    NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
-  #5,    NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
-  #6,    NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
-  #7,    NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
-  #8,    NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
-  #9,    NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
-  #10,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
+  3,    0.285,     0.294,     0.29,      6.5e5,            6.7e5,            7.6e5,            6.2e5,            7.5e5,            7.5e5,
+  4,    0.502,     0.492,     0.49,      1.22e6,           1.28e6,           1.30e6,           1.32e6,           1.45e6,           1.39e6,
+  5,    0.70,      0.73,      0.666,     1.65e6,           1.85e6,           1.60e6,           1.60e6,           1.81e6,           1.79e6,
+  6,    0.802,     0.776,     0.765,     2.00e6,           1.88e6,           1.77e6,           1.85e6,           2.09e6,           1.86e6,
+  7,    0.788,     0.753,     0.833,     1.93e6,           1.98e6,           2.29e6,           2.10e6,           2.27e6,           2.17e6,
+  8,    0.843,     0.779,     0.823,     2.15e6,           2.34e6,           2.08e6,           2.20e6,           1.92e6,           2.09e6,
+  9,    0.802,     0.785,     0.85,      2.09e6,           2.40e6,           2.20e6,           2.20e6,           2.22e6,           2.24e6,
+  10,   0.785,     0.814,     0.794,     2.10e6,           1.94e6,           2.39e6,           2.00e6,           2.24e6,           2.05e6,
   #11,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
   #12,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
   #13,   NA,        NA,        NA,        NA,               NA,               NA,               NA,               NA,               NA,
@@ -96,7 +100,16 @@ datos_brutos <- datos_activos %>%
   pivot_longer(cols = -dia, names_to = c(".value", "replica"), names_pattern = "(.+)_rep(.)") %>%
   filter(!is.na(abs) & !is.na(no_celulas))
 
-datos_procesados <- datos_brutos %>%
+# Conteos celulares con las 6 réplicas: el pivot anterior solo empareja las
+# réplicas 1 a 3 con la absorbancia (solo hay 3 réplicas de absorbancia), así
+# que las réplicas 4 a 6 de células se perderían. Aquí se recuperan todas
+# para la curva de crecimiento y sus medias.
+datos_celulas <- datos_activos %>%
+  pivot_longer(cols = starts_with("no_celulas_rep"), names_to = "replica",
+               names_prefix = "no_celulas_rep", values_to = "no_celulas") %>%
+  filter(!is.na(no_celulas))
+
+datos_procesados <- datos_celulas %>%
   group_by(dia) %>%
   summarise(
     celulas_media = mean(no_celulas, na.rm = TRUE),
@@ -146,7 +159,7 @@ grafico_crecimiento_nuevo <- ggplot() +
   geom_rect(data = fases, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf, fill = fase), alpha = 0.15, inherit.aes = FALSE) +
   geom_errorbar(data = datos_procesados, aes(x = dia, ymin = sd_inferior, ymax = sd_superior), width = 0.2, color = "gray50", linewidth = 0.8) +
   geom_line(data = datos_procesados, aes(x = dia, y = celulas_media), color = "#FF6B6B", linewidth = 1.2) +
-  geom_point(data = datos_brutos, aes(x = dia, y = no_celulas, color = replica), size = 2.5, alpha = 0.8) +
+  geom_point(data = datos_celulas, aes(x = dia, y = no_celulas, color = replica), size = 2.5, alpha = 0.8) +
   
   scale_x_continuous(breaks = scales::pretty_breaks(), expand = expansion(mult = c(0, 0.05))) +
   scale_y_continuous(labels = scales::scientific, limits = c(0, max_y_lim * 1.1), expand = expansion(mult = c(0, 0.05))) +
@@ -210,6 +223,12 @@ print(grafico_crecimiento_nuevo)
 Sys.sleep(1)
 print(grafico_gompertz_nuevo)
 
+# EXPORTAR LOS GRÁFICOS (PNG, 300 dpi)
+# ------------------------------------------------------------------------------
+ggsave("correlacion_absorbancia_celulas.png", plot = grafico_correlacion, width = 8, height = 6, dpi = 300)
+ggsave("curva_crecimiento.png", plot = grafico_crecimiento_nuevo, width = 10, height = 6, dpi = 300)
+ggsave("ajuste_gompertz.png", plot = grafico_gompertz_nuevo, width = 10, height = 6, dpi = 300)
+
 cat("\n\n=========================================================\n")
 cat("          INFORME DE ANÁLISIS DE CRECIMIENTO\n")
 cat("=========================================================\n\n")
@@ -231,3 +250,43 @@ if(!is.null(params)){
 cat("---------------------------------------------------------\n")
 cat("Análisis completado.\n")
 cat("=========================================================\n")
+
+# INTERPRETACIÓN
+# ------------------------------------------------------------------------------
+# Gráfico 1 (Correlación): eje x, absorbancia (DO), que es adimensional
+# (la absorbancia no tiene unidades); eje y, densidad celular (células/mL).
+# Cada punto empareja una réplica de absorbancia con una réplica de conteo
+# celular del mismo día. Con los datos de ejemplo, la recta es
+# y = 2.69e+06 * x - 6.52e+04, con R² = 0.9744: la absorbancia predice bien
+# la densidad celular, así que se puede estimar el número de células a
+# partir de una lectura rápida de absorbancia sin contar al microscopio.
+# Gráfico 2 (Curva de crecimiento): eje x, tiempo (días); eje y, densidad
+# celular (células/mL). La línea une las medias de las 6 réplicas de conteo
+# por día, las barras muestran la desviación estándar y los puntos de color
+# son las réplicas individuales. Las bandas de color marcan las fases:
+# latencia (días 0 a 2, crecimiento lento), exponencial (días 2 a 8,
+# crecimiento rápido: la media pasa de 4.0e5 a 2.1e6 células/mL) y
+# estacionaria (días 8 a 10, la densidad se estabiliza cerca de 2.1e6
+# células/mL porque se agotan los nutrientes).
+# Gráfico 3 (Ajuste a Gompertz): eje x, tiempo (días); eje y, crecimiento
+# relativo ln(N/N0), adimensional (es el logaritmo de un cociente de dos
+# densidades, así que las unidades se cancelan). Los puntos son los datos
+# observados y la línea es el modelo de Gompertz ajustado. Con los datos de
+# ejemplo el ajuste da A = 2.94 (el crecimiento relativo máximo, es decir,
+# la población llega a unas 18 veces la inicial), mu_max = 0.81 por día
+# (la tasa máxima de crecimiento relativo) y lambda = 0.57 días (la fase de
+# latencia). Los valores exactos los imprime el informe de arriba.
+
+# QUÉ APRENDIMOS
+# ------------------------------------------------------------------------------
+# - La absorbancia sirve como medida rápida de la densidad celular cuando
+#   la correlación es fuerte (aquí R² = 0.97), pero hay que calibrarla con
+#   conteos reales: la recta solo vale dentro del rango medido.
+# - La curva de crecimiento tiene tres fases y cada una se lee en el
+#   gráfico: latencia (plana), exponencial (subida) y estacionaria (meseta).
+# - El modelo de Gompertz resume la curva en tres parámetros con
+#   significado biológico: cuánto crece en total (A), a qué velocidad
+#   máxima (mu_max) y cuánto tarda en arrancar (lambda).
+# - Las réplicas importan: la media de 6 conteos por día y su desviación
+#   estándar muestran la variabilidad real del cultivo, que una sola
+#   medición no mostraría.
