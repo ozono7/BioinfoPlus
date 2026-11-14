@@ -34,6 +34,12 @@ densidad celular y se ajusta el modelo de Gompertz.
   metabolitos de Chlorella vulgaris bajo luz azul, blanca y roja:
   análisis de componentes principales (PCA) y mapa de qué mide cada
   ómica. Datos de ejemplo generados con fines didácticos.
+- **06-alineamientos-multiples-de-secuencias:** alineamiento por pares
+  y alineamiento múltiple de secuencias 18S con Biostrings: qué es un
+  alineamiento, cómo se puntúa (matriz de sustitución, penalización por
+  gaps) y cómo se pasa del alineamiento al árbol filogenético, con
+  neighbor-joining escrito en R. Agregada el 13 de noviembre de 2026,
+  curso BioGenIA "Alineamientos y filogenia".
 
 ## Cómo usarlo
 
@@ -42,7 +48,7 @@ ejecuta el script completo. Necesitas R y los paquetes `tidyverse`,
 `nls.multstart`, `ggpmisc` y `scales`, que se indican al inicio del
 archivo.
 
-Las lecciones de bioinformática (01 a 05) se ejecutan completas: los
+Las lecciones de bioinformática (01 a 06) se ejecutan completas: los
 datos van dentro de cada archivo y no hay que rellenar nada. Necesitan R
 y los paquetes `tidyverse`, `Biostrings` (Bioconductor) y `ape` (lección
 02), que se indican al inicio de cada archivo. Cada lección exporta sus

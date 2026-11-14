@@ -1,0 +1,605 @@
+# ==========================================================================
+# 06. Alineamientos: alineamiento por pares y alineamiento multiple de
+#     secuencias 18S
+# ==========================================================================
+# Autor: Dr. Jose Juan Torres Martinez
+# Docente de Ciencias Quimicas
+# Universidad Autonoma de San Luis Potosi (UASLP)
+# Mexico
+#
+# Material academico para estudiantes
+# Serie "BioinfoPlus" - Leccion 06: Alineamientos y filogenia
+#
+# Descripcion: Se alinean secuencias del gen 18S de seis microalgas
+#   verdes. Primero se alinean dos secuencias por pares con el algoritmo
+#   de Needleman y Wunsch (alineamiento global) y se explica como se
+#   puntua un alineamiento: matriz de sustitucion, penalizacion por abrir
+#   un gap y penalizacion por extenderlo. Despues se comparan los genes
+#   18S completos de dos especies, donde aparecen gaps porque los genes
+#   tienen distinta longitud y acumulaban inserciones y deleciones. Por
+#   ultimo se construye el alineamiento multiple de los seis fragmentos
+#   de 200 nucleotidos, se calcula el consenso y las posiciones variables
+#   y se pasa del alineamiento al arbol filogenetico con distancias de
+#   Jukes y Cantor y el metodo de neighbor-joining, escrito en R en esta
+#   leccion.
+#
+# Objetivos de aprendizaje:
+#   - Explicar que es un alineamiento y por que dos secuencias homologas
+#     se comparan posicion por posicion.
+#   - Alinear dos secuencias por pares con Biostrings (pairwiseAlignment)
+#     y leer su puntuacion, su identidad y sus gaps.
+#   - Explicar que es un gap, cuando aparece y como se penaliza.
+#   - Construir un alineamiento multiple a partir de fragmentos de la
+#     misma region y calcular su consenso y sus posiciones variables.
+#   - Pasar del alineamiento multiple a un arbol filogenetico con
+#     distancias geneticas y neighbor-joining.
+#
+# Datos: fragmento de 200 nucleotidos del gen 18S, el mismo de las
+#   lecciones 01 y 02. Chlorella vulgaris SAG 211-11b, X13688, posiciones
+#   1175-1374; Chlorella sorokiniana SAG 211-8k, X62441, posiciones
+#   1174-1373; Scenedesmus acutus MPI, AJ249512, posiciones 1162-1361;
+#   Dunaliella salina, M84320, posiciones 1561-1760; Chlamydomonas
+#   reinhardtii, M32703, posiciones 1169-1368; Haematococcus pluvialis
+#   SAG 34-1b, AF159369, posiciones 1141-1340. Genes 18S completos:
+#   Chlorella vulgaris X13688 (1798 nucleotidos) y Chlamydomonas
+#   reinhardtii M32703 (1791 nucleotidos). Secuencias descargadas de
+#   GenBank (NCBI) el 2026-11-09.
+# ==========================================================================
+
+# --------------------------------------------------------------------------
+# 1. Cargar paquetes
+# --------------------------------------------------------------------------
+# install.packages("tidyverse")
+# if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+# BiocManager::install("Biostrings")
+
+library(tidyverse)
+library(Biostrings)
+
+# --------------------------------------------------------------------------
+# 2. Datos: secuencias del fragmento 18S (200 nucleotidos cada una)
+# --------------------------------------------------------------------------
+# Las seis secuencias cubren la misma region homologa del gen 18S.
+fragmentos <- DNAStringSet(c(
+  "Chlorella vulgaris" = paste0(
+    "CCTGCGGCTTAATTTGACTCAACACGGGAAAACTTACCAGGTCCAGACAT",
+    "AGTGAGGATTGACAGATTGAGAGCTCTTTCTTGATTCTATGGGTGGTGGT",
+    "GCATGGCCGTTCTTAGTTGGTGGGTTGCCTTGTCAGGTTGATTCCGGTAA",
+    "CGAACGAGACCTCAGCCTGCTAAATAGTCACGGTTGGTTCGCCAGCCGGC"
+  ),
+  "Chlorella sorokiniana" = paste0(
+    "CCTGCGGCTTAATTTGACTCAACACGGGAAAACTTACCAGGTCCAGACAT",
+    "AGTGAGGATTGACAGATTGAGAGCTCTTTCTTGATTCTATGGGTGGTGGT",
+    "GCATGGCCGTTCTTAGTTGGTGGGTTGCCTTGTCAGGTTGATTCCGGTAA",
+    "CGAACGAGACCTCAGCCTGCTAAATAGTCACGGTTGGTTCGCCAGCCGGC"
+  ),
+  "Scenedesmus acutus" = paste0(
+    "CCTGCGGCTTAATTTGACTCAACACGGGAAAACTTACCAGGTCCAGACAT",
+    "AGTGAGGATTGACAGATTGAGAGCTCTTTCTTGATTCTATGGGTGGTGGT",
+    "GCATGGCCGTTCTTAGTTGGTGGGTTGCCTTGTCAGGTTGATTCCGGTAA",
+    "CGAACGAGACCTCAGCCTGCTAAATAGTCTCAGTTGCTTTTTGCAGCTGG"
+  ),
+  "Dunaliella salina" = paste0(
+    "CCTGCGGCTTAATTTGACTCAACACGGGAAAACTTACCAGGTCCAGACAC",
+    "GGGGAGGATTGACAGATTGAGAGCTCTTTCTTGATTCTGTGGGTGGTGGT",
+    "GCATGGCCGTTCTTAGTTGGTGGGTTGCCTTGTCAGGTTGATTCCGGTAA",
+    "CGAACGAGACCTCAGCCTGCTAAATAGTCACGTCTACCTCGGTAGGCGCC"
+  ),
+  "Chlamydomonas reinhardtii" = paste0(
+    "CCTGCGGCTTAATTTGACTCAACACGGGGAAACTTACCAGGTCCAGACAC",
+    "GGGAAGGATTGACAGATTGAGAGCTCTTTCTTGATTCTGTGGGTGGTGGT",
+    "GCATGGCCGTTCTTAGTTGGTGGGTTGCCTTGTCAGGTTGATTCCGGTAA",
+    "CGAACGAGACCTCAGCCTGCTAAATAGTCAGCATCGCACCTGCGGTGCGC"
+  ),
+  "Haematococcus pluvialis" = paste0(
+    "CCTGCGGCTTAATTTGACTCAACACGGGAAAACTTACCAGGTCCAGACAC",
+    "GGGAAGGATTGACAGATTGAGAGCTCTTTCTTGATTCTGTGGGTGGTGGT",
+    "GCATGGCCGTTCTTAGTTGGTGGGTTGCCTTGTCAGGTTGATTCCGGTAA",
+    "CGAACGAGACCTCAGCCTGCTAAATAGTCAAGCGTACCTTGGTACGGGCT"
+  )))
+
+# Genes 18S completos, para ver donde aparecen los gaps.
+gen_cv <- paste0(
+    "AACCTGGTTGATCCTGCCAGTAGTCATATGCTTGTCTCAAAGATTAAGCC",
+    "ATGCATGTCTAAGTATAAACTGCTTTATACTGTGAAACTGCGAATGGCTC",
+    "ATTAAATCAGTTATAGTTTATTTGATGGTACTTACTACTCGGATACCCGT",
+    "AGTAAATCTAGAGCTAATACGTGCGTAAATCCCGACTTCTGGAAGGGACG",
+    "TATTTATTAGATAAAAGGCCGACCGGGCTTCTGCCCGACTCGCGGTGAAT",
+    "CATGATAACTTCACGAATCGCATGGCCTTGTGCCGGCGATGTTTCATTCA",
+    "AATTTCTGCCCTATCAACTTTTGATGGTAGGATAGAGGCCTACCATGGTG",
+    "GTAACGGGTGACGGAGGATTAGGGTTCGATTCCGGAGAGGGAGCCTGAGA",
+    "AACGGCTACCACATCCAAGGAAGGCAGCAGGCGCGCAAATTACCCAATCC",
+    "TGACACAGGGAGGTAGTGACAATAAATAACAATACTGGGCCTTTTCAGGT",
+    "CTGGTAATTGGAATGAGTACAATCTAAACCCCTTAACGAGGATCAATTGG",
+    "AGGGCAAGTCTGGTGCCAGCAGCCGCGGTAATTCCAGCTCCAATAGCGTA",
+    "TATTTAAGTTGCTGCAGTTAAAAAGCTCGTAGTTGGATTTCGGGTGGGAC",
+    "CTGCCGGTCCGCCGTTTCGGTGTGCACTGGCAGGGCTCACCTTGTTGCCG",
+    "GGGACGGGCTCCTGGGCTTCACTGTCCGGGACTCGGAGTCGGCGCTGTTA",
+    "CTTTGAGTAAATTAGAGTGTTCAAAGCAGGCCTACGCTCTGAATACATTA",
+    "GCATGGAATAACACGATAGGACTCTGGCCTATCCTGTTGGTCTGTAGGAC",
+    "CGGAGTAATGATTAAGAGGGACAGTCGGGGGCATTCGTATTTCATTGTCA",
+    "GAGGTGAAATTCTTGGATTTATGAAAGACGAACTACTGCGAAAGCATTTG",
+    "CCAAGGATGTTTTCATTAATCAAGAACGAAAGTTGGGGGCTCGAAGACGA",
+    "TTAGATACCGTCCTAGTCTCAACCATAAACGATGCCGACTAGGGATCGGC",
+    "GGATGTTTCTTCGATGACTCCGCCGGCACCTTATGAGAAATCAAAGTTTT",
+    "TGGGTTCCGGGGGGAGTATGGTCGCAAGGCTGAAACTTAAAGGAATTGAC",
+    "GGAAGGGCACCACCAGGCGTGGAGCCTGCGGCTTAATTTGACTCAACACG",
+    "GGAAAACTTACCAGGTCCAGACATAGTGAGGATTGACAGATTGAGAGCTC",
+    "TTTCTTGATTCTATGGGTGGTGGTGCATGGCCGTTCTTAGTTGGTGGGTT",
+    "GCCTTGTCAGGTTGATTCCGGTAACGAACGAGACCTCAGCCTGCTAAATA",
+    "GTCACGGTTGGTTCGCCAGCCGGCGGACTTCTTAGAGGGACTATTGGCGA",
+    "CTAGCCAATGGAAGCATGAGGCAATAACAGGTCTGTGATGCCCTTAGATG",
+    "TTCTGGGCCGCACGCGCGCTACACTGATGCATTCAACGAGCCTAGCCTTG",
+    "GCCGAGAGGCCCGGGTAATCTTCGAAACTGCATCGTGATGGGGATAGATT",
+    "ATTGCAATTATTAATCTTCAACGAGGAATGCCTAGTAAGCGCAAGTCATC",
+    "AGCTTGCGTTGATTACGTCCCTGCCCTTTGTACACACCGCCCGTCGCTCC",
+    "TACCGATTGGGTGTGCTGGTGAAGTGTTCGGATTGGCGACCTGGGGCGGT",
+    "CTCCGCTCTCGGCCGCCGAGAAGTTCATTAAACCCTCCCACCTAGAGGAA",
+    "GGAGAAGTCGTAACAAGGTTTCCGTAGGTGAACCTGCAGAAGGATCAA"
+  )
+gen_cr <- paste0(
+    "TACCTGGTTGATCCTGCCAGTAGTCATATGCTTGTCTCAAAGATTAAGCC",
+    "ATGCATGTCTAAGTATAAACTGCTTATACTGTGAAACTGCGAATGGCTCA",
+    "TTAAATCAGTTATAGTTTATTTGATGGTACCTACTACTCGGATAACCGTA",
+    "GTAATTCTAGAGCTAATACGTGCGCACAACCCGACTTCTGGAAGGGTCGT",
+    "ATTTATTAGATAAAAGGCCAGCCGGGCTCTGCCCGACCTGCGGTGAATCA",
+    "TGATAACTTCACGAATCGTATGGGCTCGTCCCGACGATGTTTCATTCAAA",
+    "TTTCTGCCCTATCAACTTTCGATGGTAGGATAGAGGCCTACCATGGTGGT",
+    "AACGGGTGACGGAGGATTAGGGTTCGATTCCGGAGAGGGAGCCTGAGAGA",
+    "TGGCTACCACATCCAAGGAAGGCAGCAGGCGCGCAAATTACCCAATCCCG",
+    "ACACGGGGAGGTAGTGACAATAAATAACAATACCGGGCGCTTCGCGTCTG",
+    "GTAATTGGAATGAGTACAATCTAAATCCCTTAACGAGGATCCATTGGAGG",
+    "GCAAGTCTGGTGCCAGCAGCCGCGGTAATTCCAGCTCCAATAGCGTATAT",
+    "TTAAGTTGTTGCAGTTAAAAAGCTCGTAGTTGGATTTCGGGTGGGGTGGT",
+    "GCGGTCCGCCTCTGGTGTGCACTGCTCTGCTCCACCTTCCTGCCGGGGAC",
+    "GGGCTCCTGGGCTTCACTGTCTGGGACTCGGAGTCGGCGAGGTTACTTTG",
+    "AGTAAATTAGAGTGTTCAAAGCAGGCCTACGCTCTGAATACATTAGCATG",
+    "GAATAACACGATAGGACTCTGGCCTATCTGTTGGTCTGTGGGACCGGAGT",
+    "AATGATTAAGAGGGGTAGTCGGGGGCATTCGTATTCCGTTGTCAGAGGTG",
+    "AAATTCTTGGATTTACGGAAGACGAACATCTGCGAAAGCATTTGCCAAGG",
+    "ATACTTTCATTGATCAAGAACGAAAGTTGGGGGCTCGAAGACGATTAGAT",
+    "ACCGTCGTAGTCTCAACCATAAACGATGCCGACTAGGGATTGGCAGATGT",
+    "TCTTTTGATGACTCTGCCAGCACCTTATGAGAAATCAAAGTTTTTGGGTT",
+    "CCGGGGGGAGTATGGTCGCAAGGCTGAAACTTAAAGGAATTGACGGAAGG",
+    "GCACCACCAGGCGTGGAGCCTGCGGCTTAATTTGACTCAACACGGGGAAA",
+    "CTTACCAGGTCCAGACACGGGAAGGATTGACAGATTGAGAGCTCTTTCTT",
+    "GATTCTGTGGGTGGTGGTGCATGGCCGTTCTTAGTTGGTGGGTTGCCTTG",
+    "TCAGGTTGATTCCGGTAACGAACGAGACCTCAGCCTGCTAAATAGTCAGC",
+    "ATCGCACCTGCGGTGCGCCGACTTCTTAGAGGGACTATTGGCGTTTAGCC",
+    "AATGGAAGTATGAGGCGATAACAGGTCTGTGATGCCCTTAGATGTTCTGG",
+    "GCCGCACGCGCGCTACACTGACGCGACCAACGAGCCTATCCTTGGCCGAG",
+    "AGGCCCGGGTAATCTTGTAAACCGCGTCGTGATGGGGATAGATTATTGCA",
+    "ATTATTAGTCTTCAACGAGGAATGCCTAGTAAGCGCGAGTCATCAGCTCG",
+    "CGTTGATTACGTCCCTGCCCTTTGTACACACCGCCCGTCGCTCCTACCGA",
+    "TTGGGTGTGCTGGTGAAGTGTTCGGATTGAGCTTGGCTGGGGCAACCTGG",
+    "CCTTGCTTGAGAAGTTCATTAAACCCTCCCACCTAGAGGAAGGAGAAGTC",
+    "GTAACAAGGTTTCCGTAGGTGAACCTGCGGAAGGATCATTG"
+  )
+gen_cv <- DNAString(gen_cv)
+gen_cr <- DNAString(gen_cr)
+nchar(gen_cv)
+nchar(gen_cr)
+
+# --------------------------------------------------------------------------
+# 3. Alineamiento por pares: los fragmentos de 200 nucleotidos
+# --------------------------------------------------------------------------
+# El alineamiento global de Needleman y Wunsch (Needleman y Wunsch, 1970)
+# compara dos secuencias completas, de principio a fin. Cada columna del
+# alineamiento enfrenta dos bases o una base con un gap. La puntuacion
+# suma +2 por cada coincidencia y -3 por cada desajuste (matriz de
+# sustitucion), y resta 5 por cada gap que se abre y 2 por cada posicion
+# que lo extiende. El algoritmo busca el alineamiento con la puntuacion
+# mas alta: eso es alinear, elegir el arreglo que explica mejor la
+# relacion entre las dos secuencias.
+matriz_sustitucion <- nucleotideSubstitutionMatrix(match = 2, mismatch = -3, baseOnly = TRUE)
+
+al_cv_cr <- pairwiseAlignment(fragmentos[["Chlorella vulgaris"]],
+  fragmentos[["Chlamydomonas reinhardtii"]], type = "global",
+  substitutionMatrix = matriz_sustitucion, gapOpening = 5, gapExtension = 2)
+al_cv_cr
+
+# La puntuacion, la identidad y la longitud salen del alineamiento mismo.
+# La identidad es el porcentaje de columnas con la misma base en las dos
+# secuencias. Los gaps se cuentan en cada secuencia alineada: un guion
+# es una posicion donde esa secuencia no tiene base.
+resumen_alineamiento <- function(al) {
+  patron <- as.character(pattern(al))
+  sujeto <- as.character(subject(al))
+  bases_patron <- strsplit(patron, split = "", fixed = TRUE)[[1]]
+  bases_sujeto <- strsplit(sujeto, split = "", fixed = TRUE)[[1]]
+  tibble(
+    puntuacion = score(al),
+    identidad_pct = pid(al),
+    longitud = nchar(patron),
+    coincidencias = sum(bases_patron == bases_sujeto),
+    desajustes = sum(bases_patron != bases_sujeto & bases_patron != "-" & bases_sujeto != "-"),
+    gaps_patron = sum(bases_patron == "-"),
+    gaps_sujeto = sum(bases_sujeto == "-")
+  )
+}
+resumen_alineamiento(al_cv_cr)
+
+# Las dos Chlorella tienen el fragmento identico: el alineamiento es
+# perfecto, sin desajustes ni gaps, y la puntuacion es 200 columnas por
+# +2 puntos.
+al_cv_cs <- pairwiseAlignment(fragmentos[["Chlorella vulgaris"]],
+  fragmentos[["Chlorella sorokiniana"]], type = "global",
+  substitutionMatrix = matriz_sustitucion, gapOpening = 5, gapExtension = 2)
+resumen_alineamiento(al_cv_cs)
+
+# --------------------------------------------------------------------------
+# 4. Donde aparecen los gaps: los genes 18S completos
+# --------------------------------------------------------------------------
+# Los fragmentos de 200 nucleotidos cubren la misma region y tienen la
+# misma longitud, asi que su alineamiento casi no necesita gaps. Los
+# genes completos son otra cosa: Chlorella vulgaris tiene 1798
+# nucleotidos y Chlamydomonas reinhardtii 1791, y en su historia
+# acumularon inserciones y deleciones. Para enfrentar posiciones
+# homologas, el alineamiento tiene que abrir gaps: sin ellos, todas las
+# bases despues de una insercion quedarian corridas una posicion y
+# parecerian desajustes.
+al_genes <- pairwiseAlignment(gen_cv, gen_cr, type = "global",
+  substitutionMatrix = matriz_sustitucion, gapOpening = 5, gapExtension = 2)
+resumen_alineamiento(al_genes)
+
+# --------------------------------------------------------------------------
+# 5. Alineamiento multiple: los seis fragmentos juntos
+# --------------------------------------------------------------------------
+# Un alineamiento multiple enfrenta todas las secuencias a la vez, en
+# columnas. Cada columna es una posicion homologa: las bases de esa
+# columna descienden de la misma base del ancestro comun. Estos seis
+# fragmentos cubren la misma region del gen 18S, tienen la misma
+# longitud y en esta ventana no hay inserciones ni deleciones, asi que
+# apilarlos tal cual ya es un alineamiento multiple valido: cada columna
+# enfrenta posiciones homologas sin necesidad de gaps. Con secuencias de
+# distinta longitud o con indels habria que usar un programa de
+# alineamiento multiple (por ejemplo ClustalW o MUSCLE, del paquete msa),
+# que alinea primero los pares mas parecidos y luego suma el resto.
+alineamiento <- fragmentos
+nchar(alineamiento)
+
+# La matriz de caracteres: una fila por especie y una columna por
+# posicion del alineamiento. Todo lo que sigue se calcula de esta
+# matriz, no de valores escritos a mano.
+matriz_caracteres <- as.matrix(alineamiento)
+n_posiciones <- ncol(matriz_caracteres)
+
+# Consenso: en cada posicion, la base mayoritaria, es decir, la base que
+# llevan mas especies en esa columna. El consenso resume el alineamiento
+# en una sola secuencia: donde las seis especies coinciden, el consenso
+# lleva esa base; donde difieren, lleva la base del grupo mayoritario.
+base_mayoritaria <- apply(matriz_caracteres, 2, function(columna) {
+  nombres_tabla <- names(which.max(table(columna)))
+  nombres_tabla[1]
+})
+consenso <- paste(base_mayoritaria, collapse = "")
+consenso
+
+# Posiciones variables: columnas donde no todas las especies tienen la
+# misma base. Son las posiciones que distinguen a las especies y las que
+# llevan la senal para el arbol.
+bases_distintas <- apply(matriz_caracteres, 2, function(columna) length(unique(columna)))
+n_variables <- sum(bases_distintas > 1)
+n_variables
+n_tres_o_mas <- sum(bases_distintas >= 3)
+n_tres_o_mas
+
+# Conservacion por posicion: en cada columna, el porcentaje de especies
+# que llevan la base mayoritaria. 100% es una posicion conservada, donde
+# las seis especies coinciden; menos de 100% es una posicion variable.
+conservacion <- vapply(seq_len(n_posiciones), function(j) {
+  mean(matriz_caracteres[, j] == base_mayoritaria[j]) * 100
+}, numeric(1))
+tabla_conservacion <- tibble(
+  posicion = seq_len(n_posiciones),
+  bases_distintas = bases_distintas,
+  conservacion_pct = conservacion
+)
+tabla_conservacion
+
+# --------------------------------------------------------------------------
+# 6. Identidad por pares desde el alineamiento multiple
+# --------------------------------------------------------------------------
+# La identidad entre dos especies es el porcentaje de columnas del
+# alineamiento donde las dos tienen la misma base. Se calcula de la
+# matriz de caracteres, posicion por posicion.
+especies <- names(alineamiento)
+n_especies <- length(especies)
+matriz_identidad <- matrix(0, nrow = n_especies, ncol = n_especies,
+  dimnames = list(especies, especies))
+for (i in seq_len(n_especies)) {
+  for (j in seq_len(n_especies)) {
+    matriz_identidad[i, j] <- mean(matriz_caracteres[i, ] == matriz_caracteres[j, ]) * 100
+  }
+}
+matriz_identidad
+
+# --------------------------------------------------------------------------
+# 7. Del alineamiento al arbol: distancias y neighbor-joining
+# --------------------------------------------------------------------------
+# Distancia p: diferencias divididas por la longitud del alineamiento.
+# Es la proporcion de sitios que difieren, un numero sin unidades
+# entre 0 y 1.
+matriz_p <- (100 - matriz_identidad) / 100
+diag(matriz_p) <- 0
+
+# Correccion de Jukes y Cantor (Jukes y Cantor, 1969):
+#   d = -3/4 * ln(1 - 4p/3)
+# Cuando dos secuencias difieren en una posicion, ese sitio pudo cambiar
+# mas de una vez en su historia. La distancia p cuenta solo lo que se ve
+# y se queda corta; la correccion estima la distancia real, en
+# sustituciones por sitio (sin unidades).
+matriz_jc <- -0.75 * log(1 - 4 * matriz_p / 3)
+diag(matriz_jc) <- 0
+matriz_jc
+
+# Neighbor-joining (Saitou y Nei, 1987): en cada paso se unen las dos
+# especies mas cercanas segun la matriz de distancias, se crea un nodo
+# interno que las agrupa y se recalculan las distancias del nuevo nodo
+# al resto. La longitud de cada rama se mide en sustituciones por
+# sitio. El algoritmo se escribe aqui en R, sin paquetes extra: la
+# funcion recibe la matriz de distancias y devuelve la tabla de ramas,
+# sus longitudes, las especies y el numero de nodos internos.
+neighbor_joining <- function(D) {
+  taxa <- colnames(D)
+  n <- length(taxa)
+  ramas <- matrix(nrow = 0, ncol = 2)
+  longitudes <- numeric(0)
+  activo <- taxa
+  nodo <- setNames(seq_len(n), taxa)
+  siguiente <- n + 1
+  d <- D
+  while (length(activo) > 3) {
+    m <- length(activo)
+    sumas <- rowSums(d)
+    Q <- matrix(Inf, m, m)
+    for (i in seq_len(m)) for (j in seq_len(m))
+      if (i != j) Q[i, j] <- (m - 2) * d[i, j] - sumas[i] - sumas[j]
+    ij <- which(Q == min(Q), arr.ind = TRUE)[1, ]
+    i <- ij[1]
+    j <- ij[2]
+    # Longitudes de las dos ramas nuevas. Si el calculo da un valor
+    # negativo (pasa cuando dos secuencias son identicas y la distancia
+    # es cero), la rama se pone en 0: una longitud negativa no tiene
+    # sentido biologico.
+    longitud_i <- 0.5 * d[i, j] + (sumas[i] - sumas[j]) / (2 * (m - 2))
+    longitud_j <- d[i, j] - longitud_i
+    u <- siguiente
+    siguiente <- siguiente + 1
+    ramas <- rbind(ramas, c(u, nodo[[activo[i]]]), c(u, nodo[[activo[j]]]))
+    longitudes <- c(longitudes, max(0, longitud_i), max(0, longitud_j))
+    nuevo <- 0.5 * (d[i, ] + d[j, ] - d[i, j])
+    resto <- setdiff(seq_len(m), c(i, j))
+    d2 <- d[resto, resto, drop = FALSE]
+    d2 <- rbind(cbind(d2, nuevo[resto]), c(nuevo[resto], 0))
+    colnames(d2) <- rownames(d2) <- c(activo[resto], paste0("N", u))
+    d <- d2
+    nodo <- c(nodo[resto], setNames(u, paste0("N", u)))
+    activo <- c(activo[resto], paste0("N", u))
+  }
+  # Quedan tres nodos: se unen en un nodo central, con las longitudes
+  # que reparten las tres distancias entre ellos.
+  raiz <- siguiente
+  dab <- d[1, 2]
+  dac <- d[1, 3]
+  dbc <- d[2, 3]
+  la <- max(0, (dab + dac - dbc) / 2)
+  lb <- max(0, (dab + dbc - dac) / 2)
+  lc <- max(0, (dac + dbc - dab) / 2)
+  ramas <- rbind(ramas,
+    c(raiz, nodo[[activo[1]]]),
+    c(raiz, nodo[[activo[2]]]),
+    c(raiz, nodo[[activo[3]]]))
+  longitudes <- c(longitudes, la, lb, lc)
+  list(edge = ramas, edge.length = longitudes, tip.label = taxa, Nnode = siguiente - n)
+}
+
+arbol <- neighbor_joining(matriz_jc)
+arbol
+
+# Texto Newick del arbol, con las longitudes de rama.
+hijos_arbol <- split(arbol$edge[, 2], arbol$edge[, 1])
+longitud_rama <- function(padre, hijo) {
+  fila <- which(arbol$edge[, 1] == padre & arbol$edge[, 2] == hijo)
+  arbol$edge.length[fila]
+}
+a_newick <- function(nodo) {
+  hijos_nodo <- hijos_arbol[[as.character(nodo)]]
+  if (is.null(hijos_nodo)) return(arbol$tip.label[nodo])
+  partes <- vapply(hijos_nodo, function(h) {
+    paste0(a_newick(h), ":", sprintf("%.4f", longitud_rama(nodo, h)))
+  }, character(1))
+  paste0("(", paste(partes, collapse = ","), ")")
+}
+raiz_arbol <- setdiff(unique(arbol$edge[, 1]), unique(arbol$edge[, 2]))[1]
+cat(a_newick(raiz_arbol), ";\n", sep = "")
+
+# --------------------------------------------------------------------------
+# 8. Coordenadas del arbol para graficarlo con ggplot2
+# --------------------------------------------------------------------------
+# La raiz del dibujo es el nodo interno que nunca aparece como hijo en la
+# tabla de ramas (arbol$edge). La coordenada x de cada nodo es su distancia
+# a la raiz, sumando la longitud de las ramas. La coordenada y de cada punta
+# se asigna recorriendo el arbol desde la raiz; la y de cada nodo interno
+# es el promedio de las y de sus hijos.
+n_puntas <- length(arbol$tip.label)
+n_total <- n_puntas + arbol$Nnode
+nodos_padre <- arbol$edge[, 1]
+nodos_hijo <- arbol$edge[, 2]
+raiz <- setdiff(unique(nodos_padre), unique(nodos_hijo))[1]
+
+profundidad <- rep(NA_real_, n_total)
+profundidad[raiz] <- 0
+cambio <- TRUE
+while (cambio) {
+  cambio <- FALSE
+  for (k in seq_len(nrow(arbol$edge))) {
+    padre <- arbol$edge[k, 1]
+    hijo <- arbol$edge[k, 2]
+    if (!is.na(profundidad[padre]) && is.na(profundidad[hijo])) {
+      profundidad[hijo] <- profundidad[padre] + arbol$edge.length[k]
+      cambio <- TRUE
+    }
+  }
+}
+
+hijos_de <- split(arbol$edge[, 2], arbol$edge[, 1])
+
+orden_puntas <- c()
+recorrer <- function(nodo) {
+  hijos_nodo <- hijos_de[[as.character(nodo)]]
+  if (is.null(hijos_nodo)) {
+    orden_puntas <<- c(orden_puntas, nodo)
+  } else {
+    for (h in hijos_nodo) recorrer(h)
+  }
+}
+recorrer(raiz)
+
+pos_y <- rep(NA_real_, n_total)
+for (i in seq_along(orden_puntas)) pos_y[orden_puntas[i]] <- i
+calcular_y <- function(nodo) {
+  if (!is.na(pos_y[nodo])) return(pos_y[nodo])
+  hijos_nodo <- hijos_de[[as.character(nodo)]]
+  pos_y[nodo] <<- mean(vapply(hijos_nodo, calcular_y, numeric(1)))
+  pos_y[nodo]
+}
+calcular_y(raiz)
+
+# Un segmento horizontal por rama y uno vertical por nodo interno.
+segmentos_h <- tibble(
+  x0 = profundidad[arbol$edge[, 1]],
+  x1 = profundidad[arbol$edge[, 2]],
+  y = pos_y[arbol$edge[, 2]]
+)
+segmentos_v <- tibble(
+  x = profundidad[as.integer(names(hijos_de))],
+  y0 = vapply(hijos_de, function(h) min(pos_y[h]), numeric(1)),
+  y1 = vapply(hijos_de, function(h) max(pos_y[h]), numeric(1))
+)
+etiquetas <- tibble(
+  x = profundidad[seq_len(n_puntas)],
+  y = pos_y[seq_len(n_puntas)],
+  especie = arbol$tip.label
+)
+
+# --------------------------------------------------------------------------
+# 9. Graficos
+# --------------------------------------------------------------------------
+tabla_identidad <- as.data.frame(as.table(matriz_identidad))
+grafico_identidad <- ggplot(tabla_identidad, aes(x = Var1, y = Var2, fill = Freq)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "darkgreen") +
+  labs(
+    x = NULL,
+    y = NULL,
+    fill = "Identidad\n(%)",
+    title = "Identidad de secuencia entre las seis especies (alineamiento multiple)"
+  ) +
+  theme_minimal()
+
+grafico_conservacion <- ggplot(tabla_conservacion, aes(x = posicion, y = conservacion_pct)) +
+  geom_line() +
+  geom_point(data = filter(tabla_conservacion, bases_distintas > 1), size = 1) +
+  labs(
+    x = "Posicion del alineamiento (1-200)",
+    y = "Especies con la base mayoritaria (%)",
+    title = "Conservacion por posicion en el fragmento 18S"
+  ) +
+  theme_minimal()
+
+grafico_arbol <- ggplot() +
+  geom_segment(data = segmentos_h, aes(x = x0, xend = x1, y = y, yend = y)) +
+  geom_segment(data = segmentos_v, aes(x = x, xend = x, y = y0, yend = y1)) +
+  geom_text(data = etiquetas, aes(x = x, y = y, label = especie), hjust = 0, nudge_x = 0.002, size = 3.5) +
+  coord_cartesian(xlim = c(0, max(profundidad) * 2)) +
+  labs(
+    x = "Distancia desde la raiz (sustituciones por sitio)",
+    y = NULL,
+    title = "Arbol filogenetico (neighbor-joining, distancias de Jukes-Cantor)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+
+grafico_identidad
+grafico_conservacion
+grafico_arbol
+
+ggsave("06-matriz-identidad.png", plot = grafico_identidad, width = 8, height = 6, dpi = 300)
+ggsave("06-conservacion-por-posicion.png", plot = grafico_conservacion, width = 9, height = 5, dpi = 300)
+ggsave("06-arbol-nj.png", plot = grafico_arbol, width = 9, height = 5, dpi = 300)
+
+# --------------------------------------------------------------------------
+# Interpretacion del grafico de identidad
+# --------------------------------------------------------------------------
+# El grafico muestra la identidad de secuencia entre cada par de especies,
+# en porcentaje de columnas del alineamiento con la misma base. Eje x y
+# eje y: especies (categorias, sin unidades). El color marca el valor de
+# la identidad: mas oscuro es mas identidad.
+# Patron: la identidad mas alta es 100% entre Chlorella vulgaris y
+#   Chlorella sorokiniana (0 diferencias en 200 nucleotidos). La
+#   siguiente es 96.0% entre Dunaliella salina y Haematococcus pluvialis
+#   (8 diferencias). La identidad mas baja es 89.0% entre Scenedesmus
+#   acutus y Chlamydomonas reinhardtii (22 diferencias).
+# Significado: las especies mas cercanas en el fragmento 18S son las dos
+#   Chlorella, seguidas de Dunaliella y Haematococcus. La identidad baja
+#   con el tiempo desde el ancestro comun de cada par.
+#
+# Interpretacion del grafico de conservacion
+# --------------------------------------------------------------------------
+# El grafico muestra, para cada posicion del alineamiento (eje x, posicion
+# 1 a 200, sin unidades), el porcentaje de las seis especies que llevan la
+# base mayoritaria de esa columna (eje y, porcentaje). Los puntos marcan
+# las posiciones variables.
+# Patron: 173 de las 200 posiciones estan conservadas al 100% (las seis
+#   especies tienen la misma base). De las 27 posiciones variables, 21
+#   estan en las ultimas 21 posiciones del fragmento (180-200) y las
+#   otras 6 estan dispersas (29, 50, 51, 53, 54 y 89): ahi la
+#   conservacion baja a 83.3% (5 de 6 especies con la base mayoritaria),
+#   a 66.7% (4 de 6) o a 50% (3 de 6).
+# Significado: la mayor parte de este fragmento del gen 18S es igual en
+#   las seis especies porque el gen ribosomal cambia despacio; las
+#   diferencias que separan a las especies viven en una region corta y
+#   variable del fragmento. Por eso un fragmento corto alcanza para
+#   agrupar especies cercanas, pero no para resolver las relaciones
+#   profundas del arbol.
+#
+# Interpretacion del arbol
+# --------------------------------------------------------------------------
+# El grafico es un arbol filogenetico. No tiene ejes cartesianos: cada
+# punta es una especie, cada nodo interno es un ancestro comun y la
+# longitud de cada rama se mide en sustituciones por sitio (eje x, numero
+# sin unidades). El eje y solo ordena las puntas y no tiene escala.
+# Patron: el arbol agrupa a las dos Chlorella en una rama (distancia 0.000
+#   entre ellas) y a Dunaliella salina con Haematococcus pluvialis en otra
+#   (distancia 0.041). Chlamydomonas reinhardtii queda como hermana del
+#   grupo de Scenedesmus y Chlorella, y las ramas internas son cortas.
+# Significado: el fragmento de 200 nucleotidos sostiene las dos
+#   agrupaciones cercanas, pero las ramas internas cortas indican poca
+#   senal para ordenar los grupos entre si. En los arboles publicados con
+#   el gen 18S completo (Huss et al. 1999, J. Phycol. 35:587-598),
+#   Chlorella queda en la clase Trebouxiophyceae, separada de las
+#   Chlorophyceae (Chlamydomonas, Dunaliella, Haematococcus y
+#   Scenedesmus). Un fragmento corto de una region conservada no alcanza
+#   para resolver esa separacion: la filogenia real usa el gen completo.
+#
+# --------------------------------------------------------------------------
+# Que aprendimos
+# --------------------------------------------------------------------------
+# - Un alineamiento enfrenta dos secuencias posicion por posicion: cada
+#   columna es una comparacion entre dos bases homologas.
+# - La puntuacion de un alineamiento suma las coincidencias y resta los
+#   desajustes y los gaps; el mejor alineamiento es el de mayor puntaje.
+# - Un gap es una insercion o una delecion: aparece cuando las secuencias
+#   tienen distinta longitud o acumularon indels, y se penaliza al abrirlo
+#   y al extenderlo.
+# - Un alineamiento multiple enfrenta todas las secuencias a la vez; su
+#   consenso resume la base mayoritaria de cada posicion y sus posiciones
+#   variables son las que distinguen a las especies.
+# - Del alineamiento multiple salen las distancias geneticas y, con
+#   neighbor-joining, el arbol: en este fragmento, las dos Chlorella son
+#   identicas (identidad 100%) y Dunaliella salina con Haematococcus
+#   pluvialis son el siguiente par mas cercano (identidad 96.0%).
+# - La longitud de rama se mide en sustituciones por sitio y las ramas
+#   internas cortas indican poca senal: un fragmento corto no resuelve las
+#   relaciones profundas del arbol.
